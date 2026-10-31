@@ -1,0 +1,7 @@
+# experiment outputs: logs, adapters, merged weights (~5 GB per run), sandbox workspaces
+runs/
+__pycache__/
+*.pyc
+.venv*/
+*.log
+.ipynb_checkpoints/
