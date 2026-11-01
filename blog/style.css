@@ -1,0 +1,184 @@
+
+:root {
+  --fg: #1a1a1a;
+  --fg-muted: #666;
+  --bg: #fdfdfd;
+  --accent: #0b5fff;
+  --rule: #e5e5e5;
+  --code-bg: #f5f5f5;
+  --max-width: 52rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 1.6em 0 0.6em;
+}
+
+h1 { font-size: 1.8rem; margin-top: 0; }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.1rem; }
+
+p { margin: 0.9em 0; }
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.4em auto;
+}
+
+figure { margin: 1.4em 0; }
+figcaption {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+  margin-top: 0.4em;
+}
+
+blockquote {
+  border-left: 3px solid var(--rule);
+  margin: 1em 0;
+  padding: 0.2em 1em;
+  color: var(--fg-muted);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 0.9em 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 2.5em 0;
+}
+
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+
+/* Site chrome */
+.site-header {
+  border-bottom: 1px solid var(--rule);
+  padding: 1.2rem 1.25rem;
+}
+.site-header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.site-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--fg);
+}
+.site-nav { display: flex; gap: 1.2rem; font-size: 0.95rem; }
+.site-nav a { color: var(--fg-muted); }
+.site-nav a:hover, .site-nav a.is-active { color: var(--fg); text-decoration: none; }
+
+.site-footer {
+  border-top: 1px solid var(--rule);
+  padding: 1.2rem 1.25rem;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* Listings */
+.entry-list { list-style: none; padding: 0; margin: 1.5em 0; }
+.entry-list li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 1rem;
+  padding: 0.6em 0;
+  border-bottom: 1px solid var(--rule);
+}
+.entry-list time { color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+.entry-list .entry-desc { color: var(--fg-muted); font-size: 0.92rem; margin-top: 0.2em; }
+
+@media (max-width: 540px) {
+  .entry-list li { grid-template-columns: 1fr; gap: 0.1rem; }
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.6em 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+th, td {
+  text-align: left;
+  padding: 0.5em 0.7em;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+thead th {
+  border-bottom: 2px solid var(--rule);
+  font-weight: 600;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--code-bg); }
+
+/* Let wide tables scroll horizontally instead of overflowing the viewport */
+.table-wrap, table { max-width: 100%; }
+@media (max-width: 540px) {
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
+/* KaTeX display blocks: keep them from overflowing on narrow screens */
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }

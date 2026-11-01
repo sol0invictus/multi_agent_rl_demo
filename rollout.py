@@ -38,6 +38,7 @@ async def run_rollout(proxy, sbx, task, mode, eff_bonus=EFF_BONUS):
     except Exception as e:   # a crashing harness is a failed rollout, not a crashed run
         agents = ["lead", *task.sites] if mode == "org" else ["solo"]
         res = {"answer": None, "status": f"error:{type(e).__name__}", "agents": agents, "latency": 0,
+               "n_sites": task.n_sites,
                "roles": {a: ("lead" if a == "lead" else "solo" if a == "solo" else "worker") for a in agents}}
     finally:
         for ws in wss.values():

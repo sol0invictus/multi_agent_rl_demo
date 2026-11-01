@@ -71,6 +71,8 @@ Every eval runs the **org** and **solo** modes on the same tasks. Logged coordin
 | `probe.py` | base-model eval without training; `--show N` prints full organisation transcripts |
 | `tests/smoke_offline.py` | no-GPU end-to-end test: a scripted fake vLLM drives real orgs through proxy, sandbox, grading, rows and advantages |
 | `analysis/summarize_run.py` | markdown tables for a run (eval per bucket, training curve) and `--compare` paired McNemar test between runs |
+| `analysis/make_blog_figures.py` | generates the data figures (`blog/multi-agent-rl/*.png`) and `analysis/results_org_small.json` from run logs |
+| `blog/multi-agent-rl.md`, `blog/build.mjs` | full writeup + standalone HTML renderer (`blog/multi-agent-rl.html`) in the sunnyguha.com blog style |
 | `scripts/stop_vllm.sh` | stops the vLLM server by pid (`pkill -f` would kill the calling shell) |
 | `Makefile`, `CLAUDE.md`, `requirements.txt` | common commands, agent/contributor guide, pinned versions of the shared venv |
 | `proxy.py`, `sandbox.py`, `tasks.py`, `serve_vllm.sh`, `sandbox_image/` | copied from `rl_harness`. Small changes: sandbox subdirectories, `exclude=` for messy-file kinds, venv path |

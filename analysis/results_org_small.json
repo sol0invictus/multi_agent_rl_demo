@@ -1,0 +1,669 @@
+{
+ "steps_all": [
+  0,
+  5,
+  10,
+  20,
+  30
+ ],
+ "steps_lead": [
+  0,
+  10,
+  20,
+  30
+ ],
+ "final_step": 30,
+ "eval_all": {
+  "0": {
+   "org": {
+    "n": 40,
+    "acc": 0.225,
+    "latency": 18.3,
+    "submitted": 0.175,
+    "statuses": {
+     "final_text": 27,
+     "submitted": 7,
+     "max_turns": 6
+    },
+    "tokens": {
+     "lead": 2829.325,
+     "worker": 9320.025
+    },
+    "coverage": 1.0,
+    "max_fanout": 2.15,
+    "asks": 4.8,
+    "bad_asks": 0.0,
+    "lead_turns": 4.175,
+    "worker_calls": 19.8,
+    "worker_tool_calls": 18.9,
+    "reply_fallbacks": 3.2,
+    "worker_exhausted": 1.175,
+    "full_coverage": 1.0,
+    "acc_given_full_coverage": 0.225,
+    "acc_domain": 0.2,
+    "acc_seen": 0.2,
+    "acc_tmpl": 0.4,
+    "acc_wide": 0.1,
+    "acc_k2": 0.16666666666666666,
+    "acc_k3": 0.3333333333333333,
+    "acc_k4": 0.1
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.45,
+    "latency": 7.075,
+    "submitted": 0.025,
+    "statuses": {
+     "final_text": 30,
+     "max_turns": 9,
+     "submitted": 1
+    },
+    "tokens": {
+     "solo": 2786.55
+    },
+    "acc_domain": 0.4,
+    "acc_seen": 0.5,
+    "acc_tmpl": 0.4,
+    "acc_wide": 0.5,
+    "acc_k2": 0.25,
+    "acc_k3": 0.5555555555555556,
+    "acc_k4": 0.5
+   },
+   "step": 0,
+   "time": 468.9644296169281,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "5": {
+   "org": {
+    "n": 40,
+    "acc": 0.25,
+    "latency": 16.275,
+    "submitted": 0.175,
+    "statuses": {
+     "final_text": 28,
+     "submitted": 7,
+     "max_turns": 5
+    },
+    "tokens": {
+     "lead": 2611.875,
+     "worker": 8584.1
+    },
+    "coverage": 0.98125,
+    "max_fanout": 2.15,
+    "asks": 4.525,
+    "bad_asks": 0.0,
+    "lead_turns": 4.0,
+    "worker_calls": 17.8,
+    "worker_tool_calls": 16.4,
+    "reply_fallbacks": 3.275,
+    "worker_exhausted": 0.725,
+    "full_coverage": 0.95,
+    "acc_given_full_coverage": 0.2631578947368421,
+    "acc_domain": 0.5,
+    "acc_seen": 0.3,
+    "acc_tmpl": 0.2,
+    "acc_wide": 0.0,
+    "acc_k2": 0.16666666666666666,
+    "acc_k3": 0.4444444444444444,
+    "acc_k4": 0.0
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.4,
+    "latency": 6.3,
+    "submitted": 0.025,
+    "statuses": {
+     "final_text": 32,
+     "max_turns": 7,
+     "submitted": 1
+    },
+    "tokens": {
+     "solo": 2703.35
+    },
+    "acc_domain": 0.2,
+    "acc_seen": 0.5,
+    "acc_tmpl": 0.6,
+    "acc_wide": 0.3,
+    "acc_k2": 0.5,
+    "acc_k3": 0.3888888888888889,
+    "acc_k4": 0.3
+   },
+   "step": 5,
+   "time": 407.28497672080994,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "10": {
+   "org": {
+    "n": 40,
+    "acc": 0.3,
+    "latency": 17.15,
+    "submitted": 0.15,
+    "statuses": {
+     "final_text": 29,
+     "max_turns": 5,
+     "submitted": 6
+    },
+    "tokens": {
+     "lead": 3151.825,
+     "worker": 8094.4
+    },
+    "coverage": 0.9875,
+    "max_fanout": 1.95,
+    "asks": 4.3,
+    "bad_asks": 0.025,
+    "lead_turns": 4.1,
+    "worker_calls": 16.85,
+    "worker_tool_calls": 14.9,
+    "reply_fallbacks": 2.75,
+    "worker_exhausted": 0.6,
+    "full_coverage": 0.975,
+    "acc_given_full_coverage": 0.3076923076923077,
+    "acc_domain": 0.5,
+    "acc_seen": 0.2,
+    "acc_tmpl": 0.4,
+    "acc_wide": 0.1,
+    "acc_k2": 0.25,
+    "acc_k3": 0.4444444444444444,
+    "acc_k4": 0.1
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.45,
+    "latency": 6.4,
+    "submitted": 0.025,
+    "statuses": {
+     "final_text": 33,
+     "max_turns": 6,
+     "submitted": 1
+    },
+    "tokens": {
+     "solo": 2279.85
+    },
+    "acc_domain": 0.4,
+    "acc_seen": 0.6,
+    "acc_tmpl": 0.5,
+    "acc_wide": 0.3,
+    "acc_k2": 0.5833333333333334,
+    "acc_k3": 0.4444444444444444,
+    "acc_k4": 0.3
+   },
+   "step": 10,
+   "time": 419.6967406272888,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "20": {
+   "org": {
+    "n": 40,
+    "acc": 0.375,
+    "latency": 15.875,
+    "submitted": 0.25,
+    "statuses": {
+     "final_text": 27,
+     "submitted": 10,
+     "max_turns": 3
+    },
+    "tokens": {
+     "lead": 2456.0,
+     "worker": 8101.625
+    },
+    "coverage": 1.0,
+    "max_fanout": 2.05,
+    "asks": 4.375,
+    "bad_asks": 0.0,
+    "lead_turns": 4.0,
+    "worker_calls": 16.925,
+    "worker_tool_calls": 15.675,
+    "reply_fallbacks": 2.625,
+    "worker_exhausted": 0.725,
+    "full_coverage": 1.0,
+    "acc_given_full_coverage": 0.375,
+    "acc_domain": 0.4,
+    "acc_seen": 0.4,
+    "acc_tmpl": 0.6,
+    "acc_wide": 0.1,
+    "acc_k2": 0.4166666666666667,
+    "acc_k3": 0.5,
+    "acc_k4": 0.1
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.425,
+    "latency": 7.0,
+    "submitted": 0.05,
+    "statuses": {
+     "submitted": 2,
+     "final_text": 28,
+     "max_turns": 10
+    },
+    "tokens": {
+     "solo": 3642.85
+    },
+    "acc_domain": 0.5,
+    "acc_seen": 0.2,
+    "acc_tmpl": 0.4,
+    "acc_wide": 0.6,
+    "acc_k2": 0.16666666666666666,
+    "acc_k3": 0.5,
+    "acc_k4": 0.6
+   },
+   "step": 20,
+   "time": 405.67086720466614,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "30": {
+   "org": {
+    "n": 40,
+    "acc": 0.375,
+    "latency": 14.125,
+    "submitted": 0.175,
+    "statuses": {
+     "final_text": 32,
+     "submitted": 7,
+     "max_turns": 1
+    },
+    "tokens": {
+     "lead": 2374.35,
+     "worker": 7223.5
+    },
+    "coverage": 1.0,
+    "max_fanout": 2.0,
+    "asks": 3.75,
+    "bad_asks": 0.0,
+    "lead_turns": 3.625,
+    "worker_calls": 14.4,
+    "worker_tool_calls": 12.75,
+    "reply_fallbacks": 2.35,
+    "worker_exhausted": 0.525,
+    "full_coverage": 1.0,
+    "acc_given_full_coverage": 0.375,
+    "acc_domain": 0.4,
+    "acc_seen": 0.3,
+    "acc_tmpl": 0.6,
+    "acc_wide": 0.2,
+    "acc_k2": 0.4166666666666667,
+    "acc_k3": 0.4444444444444444,
+    "acc_k4": 0.2
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.625,
+    "latency": 5.975,
+    "submitted": 0.025,
+    "statuses": {
+     "final_text": 36,
+     "submitted": 1,
+     "max_turns": 3
+    },
+    "tokens": {
+     "solo": 2396.6
+    },
+    "acc_domain": 0.7,
+    "acc_seen": 0.7,
+    "acc_tmpl": 0.7,
+    "acc_wide": 0.4,
+    "acc_k2": 0.75,
+    "acc_k3": 0.6666666666666666,
+    "acc_k4": 0.4
+   },
+   "step": 30,
+   "time": 332.15894842147827,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  }
+ },
+ "eval_lead": {
+  "0": {
+   "org": {
+    "n": 40,
+    "acc": 0.3,
+    "latency": 18.675,
+    "submitted": 0.15,
+    "statuses": {
+     "final_text": 28,
+     "max_turns": 6,
+     "submitted": 6
+    },
+    "tokens": {
+     "lead": 2853.05,
+     "worker": 8621.35
+    },
+    "coverage": 0.99375,
+    "max_fanout": 1.975,
+    "asks": 4.675,
+    "bad_asks": 0.0,
+    "lead_turns": 4.225,
+    "worker_calls": 18.775,
+    "worker_tool_calls": 17.875,
+    "reply_fallbacks": 3.1,
+    "worker_exhausted": 1.05,
+    "full_coverage": 0.975,
+    "acc_given_full_coverage": 0.3076923076923077,
+    "acc_domain": 0.2,
+    "acc_seen": 0.3,
+    "acc_tmpl": 0.5,
+    "acc_wide": 0.2,
+    "acc_k2": 0.4166666666666667,
+    "acc_k3": 0.2777777777777778,
+    "acc_k4": 0.2
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.425,
+    "latency": 7.2,
+    "submitted": 0.0,
+    "statuses": {
+     "max_turns": 9,
+     "final_text": 31
+    },
+    "tokens": {
+     "solo": 3335.95
+    },
+    "acc_domain": 0.4,
+    "acc_seen": 0.3,
+    "acc_tmpl": 0.3,
+    "acc_wide": 0.7,
+    "acc_k2": 0.25,
+    "acc_k3": 0.3888888888888889,
+    "acc_k4": 0.7
+   },
+   "step": 0,
+   "time": 381.34752774238586,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "10": {
+   "org": {
+    "n": 40,
+    "acc": 0.125,
+    "latency": 15.825,
+    "submitted": 0.1,
+    "statuses": {
+     "error:APITimeoutError": 9,
+     "max_turns": 11,
+     "final_text": 16,
+     "submitted": 4
+    },
+    "tokens": {
+     "lead": 2537.95,
+     "worker": 9444.05
+    },
+    "coverage": 0.775,
+    "max_fanout": 1.775,
+    "asks": 4.475,
+    "bad_asks": 0.025,
+    "lead_turns": 3.525,
+    "worker_calls": 17.4,
+    "worker_tool_calls": 15.5,
+    "reply_fallbacks": 2.95,
+    "worker_exhausted": 1.125,
+    "full_coverage": 0.775,
+    "acc_given_full_coverage": 0.16129032258064516,
+    "acc_domain": 0.2,
+    "acc_seen": 0.0,
+    "acc_tmpl": 0.2,
+    "acc_wide": 0.1,
+    "acc_k2": 0.08333333333333333,
+    "acc_k3": 0.16666666666666666,
+    "acc_k4": 0.1
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.375,
+    "latency": 5.225,
+    "submitted": 0.0,
+    "statuses": {
+     "error:APITimeoutError": 8,
+     "max_turns": 5,
+     "final_text": 27
+    },
+    "tokens": {
+     "solo": 2559.8
+    },
+    "acc_domain": 0.3,
+    "acc_seen": 0.0,
+    "acc_tmpl": 0.7,
+    "acc_wide": 0.5,
+    "acc_k2": 0.25,
+    "acc_k3": 0.3888888888888889,
+    "acc_k4": 0.5
+   },
+   "step": 10,
+   "time": 585.767496585846,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "20": {
+   "org": {
+    "n": 40,
+    "acc": 0.275,
+    "latency": 16.675,
+    "submitted": 0.075,
+    "statuses": {
+     "final_text": 29,
+     "submitted": 3,
+     "max_turns": 8
+    },
+    "tokens": {
+     "lead": 2298.875,
+     "worker": 8579.475
+    },
+    "coverage": 0.9833333333333334,
+    "max_fanout": 2.125,
+    "asks": 4.3,
+    "bad_asks": 0.0,
+    "lead_turns": 3.75,
+    "worker_calls": 18.35,
+    "worker_tool_calls": 17.225,
+    "reply_fallbacks": 2.95,
+    "worker_exhausted": 1.15,
+    "full_coverage": 0.975,
+    "acc_given_full_coverage": 0.28205128205128205,
+    "acc_domain": 0.5,
+    "acc_seen": 0.2,
+    "acc_tmpl": 0.3,
+    "acc_wide": 0.1,
+    "acc_k2": 0.25,
+    "acc_k3": 0.3888888888888889,
+    "acc_k4": 0.1
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.425,
+    "latency": 6.825,
+    "submitted": 0.05,
+    "statuses": {
+     "max_turns": 8,
+     "final_text": 30,
+     "submitted": 2
+    },
+    "tokens": {
+     "solo": 3309.75
+    },
+    "acc_domain": 0.2,
+    "acc_seen": 0.6,
+    "acc_tmpl": 0.5,
+    "acc_wide": 0.4,
+    "acc_k2": 0.4166666666666667,
+    "acc_k3": 0.4444444444444444,
+    "acc_k4": 0.4
+   },
+   "step": 20,
+   "time": 545.6129608154297,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  },
+  "30": {
+   "org": {
+    "n": 40,
+    "acc": 0.275,
+    "latency": 16.8,
+    "submitted": 0.275,
+    "statuses": {
+     "final_text": 24,
+     "max_turns": 5,
+     "submitted": 11
+    },
+    "tokens": {
+     "lead": 2120.875,
+     "worker": 9102.575
+    },
+    "coverage": 0.975,
+    "max_fanout": 2.1,
+    "asks": 4.45,
+    "bad_asks": 0.0,
+    "lead_turns": 3.9,
+    "worker_calls": 18.4,
+    "worker_tool_calls": 17.375,
+    "reply_fallbacks": 2.875,
+    "worker_exhausted": 1.1,
+    "full_coverage": 0.95,
+    "acc_given_full_coverage": 0.2894736842105263,
+    "acc_domain": 0.3,
+    "acc_seen": 0.4,
+    "acc_tmpl": 0.4,
+    "acc_wide": 0.0,
+    "acc_k2": 0.4166666666666667,
+    "acc_k3": 0.3333333333333333,
+    "acc_k4": 0.0
+   },
+   "solo": {
+    "n": 40,
+    "acc": 0.5,
+    "latency": 7.675,
+    "submitted": 0.175,
+    "statuses": {
+     "final_text": 23,
+     "submitted": 7,
+     "max_turns": 10
+    },
+    "tokens": {
+     "solo": 3378.725
+    },
+    "acc_domain": 0.7,
+    "acc_seen": 0.5,
+    "acc_tmpl": 0.3,
+    "acc_wide": 0.5,
+    "acc_k2": 0.5,
+    "acc_k3": 0.5,
+    "acc_k4": 0.5
+   },
+   "step": 30,
+   "time": 434.43918561935425,
+   "model": "LiquidAI/LFM2.5-2.6B"
+  }
+ },
+ "breakdown": {
+  "By site count K (org)/K=2": {
+   "base": 0.16666666666666666,
+   "lead": 0.4166666666666667,
+   "all": 0.4166666666666667,
+   "n": 12
+  },
+  "By site count K (org)/K=3": {
+   "base": 0.3333333333333333,
+   "lead": 0.3333333333333333,
+   "all": 0.4444444444444444,
+   "n": 18
+  },
+  "By site count K (org)/K=4": {
+   "base": 0.1,
+   "lead": 0.0,
+   "all": 0.2,
+   "n": 10
+  },
+  "By difficulty (org + solo)/easy": {
+   "base": 0.5,
+   "lead": 0.45,
+   "all": 0.7,
+   "n": 20
+  },
+  "By difficulty (org + solo)/medium": {
+   "base": 0.34375,
+   "lead": 0.4375,
+   "all": 0.59375,
+   "n": 32
+  },
+  "By difficulty (org + solo)/hard": {
+   "base": 0.21428571428571427,
+   "lead": 0.2857142857142857,
+   "all": 0.25,
+   "n": 28
+  },
+  "By data mess (org + solo)/clean": {
+   "base": 0.4473684210526316,
+   "lead": 0.5,
+   "all": 0.6052631578947368,
+   "n": 38
+  },
+  "By data mess (org + solo)/1 mess": {
+   "base": 0.2692307692307692,
+   "lead": 0.3076923076923077,
+   "all": 0.5384615384615384,
+   "n": 26
+  },
+  "By data mess (org + solo)/2 messes": {
+   "base": 0.1875,
+   "lead": 0.25,
+   "all": 0.1875,
+   "n": 16
+  }
+ },
+ "paired": {
+  "all_0_to_30": {
+   "org": {
+    "fixed": 8,
+    "broke": 2,
+    "p": 0.109375,
+    "n": 40
+   },
+   "solo": {
+    "fixed": 13,
+    "broke": 6,
+    "p": 0.1670684814453125,
+    "n": 40
+   },
+   "all": {
+    "fixed": 21,
+    "broke": 8,
+    "p": 0.0241195447742939,
+    "n": 80
+   }
+  },
+  "lead_0_to_30": {
+   "org": {
+    "fixed": 4,
+    "broke": 5,
+    "p": 1.0,
+    "n": 40
+   },
+   "solo": {
+    "fixed": 12,
+    "broke": 9,
+    "p": 0.6636238098144531,
+    "n": 40
+   },
+   "all": {
+    "fixed": 16,
+    "broke": 14,
+    "p": 0.855535551905632,
+    "n": 80
+   }
+  },
+  "lead_30_to_all_30": {
+   "org": {
+    "fixed": 7,
+    "broke": 3,
+    "p": 0.34375,
+    "n": 40
+   },
+   "solo": {
+    "fixed": 10,
+    "broke": 5,
+    "p": 0.3017578125,
+    "n": 40
+   },
+   "all": {
+    "fixed": 17,
+    "broke": 8,
+    "p": 0.10775214433670044,
+    "n": 80
+   }
+  }
+ }
+}

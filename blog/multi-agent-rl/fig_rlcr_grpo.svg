@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 510" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="13">
+  <title>One GRPO group of 6 organisations attempting the same task, and how Reinforcement Learning from Collective Rewards (RLCR) assigns the group-relative advantage to every agent versus only the lead.</title>
+  <style>
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 11px; fill: #1a1a1a; }
+    .s { font-size: 11px; fill: #52514e; }
+  </style>
+  <rect width="880" height="510" fill="#fdfdfd"/>
+
+  <text x="20" y="28" font-weight="bold" font-size="14" fill="#1a1a1a">One GRPO group: one task, 6 independent organisations (each = 1 lead + K workers)</text>
+  <text x="20" y="48" class="s">collective reward r = 1 if submitted answer is right (+ up to 0.1 for short critical-path latency), else 0. Group mean = 0.531, spread σ = 0.532</text>
+
+  <!-- 6 org attempts -->
+  <g transform="translate(20,66)">
+    <!-- Org 1 -->
+    <rect x="0" y="0" width="132" height="96" rx="5" fill="#fdfdfd" stroke="#1baf7a" stroke-width="1.6"/>
+    <text x="10" y="20" class="s">organisation 1</text>
+    <text x="10" y="42" font-weight="bold" fill="#1baf7a">correct (fast)</text>
+    <text x="10" y="62" class="s">latency 8 (parallel)</text>
+    <text x="10" y="82" class="m">r = 1.071</text>
+    <rect x="44" y="162" width="44" height="44" fill="#1baf7a"/><text x="66" y="155" text-anchor="middle" class="m">+0.93</text>
+
+    <!-- Org 2 -->
+    <rect x="142" y="0" width="132" height="96" rx="5" fill="#fdfdfd" stroke="#d64545" stroke-width="1.6"/>
+    <text x="152" y="20" class="s">organisation 2</text>
+    <text x="152" y="42" font-weight="bold" fill="#d64545">wrong</text>
+    <text x="152" y="62" class="s">unweighted avg</text>
+    <text x="152" y="82" class="m">r = 0.000</text>
+    <rect x="186" y="206" width="44" height="44" fill="#d64545"/><text x="208" y="266" text-anchor="middle" class="m">-0.91</text>
+
+    <!-- Org 3 -->
+    <rect x="284" y="0" width="132" height="96" rx="5" fill="#fdfdfd" stroke="#1baf7a" stroke-width="1.6"/>
+    <text x="294" y="20" class="s">organisation 3</text>
+    <text x="294" y="42" font-weight="bold" fill="#1baf7a">correct (slow)</text>
+    <text x="294" y="62" class="s">latency 15 (serial)</text>
+    <text x="294" y="82" class="m">r = 1.021</text>
+    <rect x="328" y="167" width="44" height="39" fill="#1baf7a"/><text x="350" y="160" text-anchor="middle" class="m">+0.84</text>
+
+    <!-- Org 4 -->
+    <rect x="426" y="0" width="132" height="96" rx="5" fill="#fdfdfd" stroke="#d64545" stroke-width="1.6"/>
+    <text x="436" y="20" class="s">organisation 4</text>
+    <text x="436" y="42" font-weight="bold" fill="#d64545">wrong</text>
+    <text x="436" y="62" class="s">worker exhausted</text>
+    <text x="436" y="82" class="m">r = 0.000</text>
+    <rect x="470" y="206" width="44" height="44" fill="#d64545"/><text x="492" y="266" text-anchor="middle" class="m">-0.91</text>
+
+    <!-- Org 5 -->
+    <rect x="568" y="0" width="132" height="96" rx="5" fill="#fdfdfd" stroke="#1baf7a" stroke-width="1.6"/>
+    <text x="578" y="20" class="s">organisation 5</text>
+    <text x="578" y="42" font-weight="bold" fill="#1baf7a">correct (fast)</text>
+    <text x="578" y="62" class="s">latency 5 (parallel)</text>
+    <text x="578" y="82" class="m">r = 1.093</text>
+    <rect x="612" y="160" width="44" height="46" fill="#1baf7a"/><text x="634" y="153" text-anchor="middle" class="m">+0.97</text>
+
+    <!-- Org 6 -->
+    <rect x="710" y="0" width="130" height="96" rx="5" fill="#fdfdfd" stroke="#d64545" stroke-width="1.6"/>
+    <text x="720" y="20" class="s">organisation 6</text>
+    <text x="720" y="42" font-weight="bold" fill="#d64545">wrong</text>
+    <text x="720" y="62" class="s">lead turn limit</text>
+    <text x="720" y="82" class="m">r = 0.000</text>
+    <rect x="754" y="206" width="44" height="44" fill="#d64545"/><text x="776" y="266" text-anchor="middle" class="m">-0.91</text>
+
+    <line x1="0" y1="206" x2="840" y2="206" stroke="#52514e"/>
+    <text x="0" y="124" class="s">collective advantage A_g = (r_g − mean) / max(σ, 0.05)</text>
+  </g>
+
+  <line x1="20" y1="348" x2="860" y2="348" stroke="#e5e5e5"/>
+  <text x="20" y="372" font-weight="bold" font-size="14" fill="#1a1a1a">Who inside organisation g gets the advantage A_g? (The ablation in this post)</text>
+
+  <!-- Option A: All roles -->
+  <rect x="20" y="386" width="410" height="106" rx="6" fill="#eaf2fc" stroke="#2a78d6" stroke-width="2"/>
+  <text x="34" y="410" font-weight="bold" fill="#1a1a1a">--train-roles all  (Avalon-M1 RLCR · org_small)</text>
+  <text x="34" y="430" class="s">Every sampled token of <tspan font-weight="bold" fill="#1a1a1a">lead + worker_1 + … + worker_K</tspan> gets A_g.</text>
+  <text x="34" y="448" class="s">· Lead learns to decompose questions and ask in parallel.</text>
+  <text x="34" y="466" class="s">· Workers learn to write clean pandas scripts and call reply().</text>
+  <text x="34" y="482" class="m" fill="#2a78d6">Result: org 22.5% → 37.5%, solo 45.0% → 62.5%</text>
+
+  <!-- Option B: Lead only -->
+  <rect x="450" y="386" width="410" height="106" rx="6" fill="#fdefe8" stroke="#eb6834" stroke-width="2"/>
+  <text x="464" y="410" font-weight="bold" fill="#1a1a1a">--train-roles lead  (Kimi PARL style · org_small_lead)</text>
+  <text x="464" y="430" class="s">Only <tspan font-weight="bold" fill="#1a1a1a">lead</tspan> tokens get A_g; all worker rows are dropped.</text>
+  <text x="464" y="448" class="s">· ~3.5× fewer training tokens per step (lead rows only).</text>
+  <text x="464" y="466" class="s">· Workers never improve (exhaustion stays at 1.10/task).</text>
+  <text x="464" y="482" class="m" fill="#eb6834">Result: org 30.0% → 27.5% (flat), wide (K=4) → 0%</text>
+</svg>

@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="What reinforcement learning from collective rewards (RLCR) is, how a 2.6B model is trained with GRPO + LoRA to act as both lead and workers on one RTX 3090 Ti, and why training only the lead fails." />
+    <title>Multi-Agent RL, Explained: One Small Model, One Agent Organisation, One GPU — Sunny Guha</title>
+    <link rel="stylesheet" href="katex/katex.min.css" />
+    <style>
+
+:root {
+  --fg: #1a1a1a;
+  --fg-muted: #666;
+  --bg: #fdfdfd;
+  --accent: #0b5fff;
+  --rule: #e5e5e5;
+  --code-bg: #f5f5f5;
+  --max-width: 52rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+main {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 1.6em 0 0.6em;
+}
+
+h1 { font-size: 1.8rem; margin-top: 0; }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.1rem; }
+
+p { margin: 0.9em 0; }
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.4em auto;
+}
+
+figure { margin: 1.4em 0; }
+figcaption {
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+  margin-top: 0.4em;
+}
+
+blockquote {
+  border-left: 3px solid var(--rule);
+  margin: 1em 0;
+  padding: 0.2em 1em;
+  color: var(--fg-muted);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 0.9em 1em;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 2.5em 0;
+}
+
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+
+/* Site chrome */
+.site-header {
+  border-bottom: 1px solid var(--rule);
+  padding: 1.2rem 1.25rem;
+}
+.site-header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.site-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--fg);
+}
+.site-nav { display: flex; gap: 1.2rem; font-size: 0.95rem; }
+.site-nav a { color: var(--fg-muted); }
+.site-nav a:hover, .site-nav a.is-active { color: var(--fg); text-decoration: none; }
+
+.site-footer {
+  border-top: 1px solid var(--rule);
+  padding: 1.2rem 1.25rem;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+/* Listings */
+.entry-list { list-style: none; padding: 0; margin: 1.5em 0; }
+.entry-list li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 1rem;
+  padding: 0.6em 0;
+  border-bottom: 1px solid var(--rule);
+}
+.entry-list time { color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+.entry-list .entry-desc { color: var(--fg-muted); font-size: 0.92rem; margin-top: 0.2em; }
+
+@media (max-width: 540px) {
+  .entry-list li { grid-template-columns: 1fr; gap: 0.1rem; }
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.6em 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+th, td {
+  text-align: left;
+  padding: 0.5em 0.7em;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+thead th {
+  border-bottom: 2px solid var(--rule);
+  font-weight: 600;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:nth-child(even) { background: var(--code-bg); }
+
+/* Let wide tables scroll horizontally instead of overflowing the viewport */
+.table-wrap, table { max-width: 100%; }
+@media (max-width: 540px) {
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+}
+
+/* KaTeX display blocks: keep them from overflowing on narrow screens */
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2em 0; }
+
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-inner">
+        <a href="https://www.sunnyguha.com/" class="site-title">Sunny Guha</a>
+        <nav class="site-nav">
+          <a href="https://www.sunnyguha.com/">About</a>
+          <a href="https://www.sunnyguha.com/blog" class="is-active">Blog</a>
+          <a href="https://www.sunnyguha.com/projects">Projects</a>
+          <a href="https://www.sunnyguha.com/publications">Publications</a>
+        </nav>
+      </div>
+    </header>
+    <main>
+      <article>
+        <h1>Multi-Agent RL, Explained: One Small Model, One Agent Organisation, One GPU</h1>
+        <p style="color: var(--fg-muted); margin-top: -0.4em;">
+          <time datetime="2026-11-01T00:00:00.000Z">November 1, 2026</time>
+        </p>
+<p><em>A from-scratch explanation of multi-agent RL from collective rewards, followed by a small, honest experiment on one consumer GPU.</em></p>
+<p><strong>Short version.</strong> I trained a 2.6B-parameter model (<code>LiquidAI/LFM2.5-2.6B</code>) with reinforcement learning while it worked as a small agent organisation: one <strong>lead</strong> agent that receives the question but cannot see any data, and two to four <strong>worker</strong> agents that each see only their own site’s share of the CSV files. Every agent in the organisation is the same model. After 30 training steps (about 3.5 hours on one RTX 3090 Ti), multi-agent accuracy on held-out tasks went from <strong>22.5% to 37.5%</strong>, critical-path latency dropped by <strong>23%</strong>, and worker turn-limit failures fell by <strong>55%</strong>. Evaluated zero-shot as a single agent (<code>solo</code>, never trained), the same weights jumped from <strong>45.0% to 62.5%</strong> (+16.2 points combined across all 80 test rollouts, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.024</mn></mrow><annotation encoding="application/x-tex">p = 0.024</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.024</span></span></span></span>).</p>
+<p>To check whether training the workers actually mattered, I ran the exact same 30-step experiment a second time while training <strong>only the lead’s tokens</strong> (<code>--train-roles lead</code>, freezing the workers on the shared policy). Multi-agent accuracy went nowhere (<strong>30.0% → 27.5%</strong>), and accuracy on 4-site organisations dropped to <strong>0%</strong>.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Base model (step 0)</th>
+<th>Train all roles (step 30)</th>
+<th>Train lead only (step 30)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Multi-agent (<code>org</code>, 40 tasks)</strong></td>
+<td>22.5%</td>
+<td><strong>37.5%</strong> (+15.0 pts)</td>
+<td>27.5% (−2.5 pts)</td>
+</tr>
+<tr>
+<td><strong>Single-agent (<code>solo</code>, 40 tasks, zero-shot)</strong></td>
+<td>45.0%</td>
+<td><strong>62.5%</strong> (+17.5 pts)</td>
+<td>50.0% (+7.5 pts)</td>
+</tr>
+<tr>
+<td><strong>Combined (<code>org + solo</code>, 80 rollouts)</strong></td>
+<td>33.8%</td>
+<td><strong>50.0%</strong> (+16.2 pts, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.024</mn></mrow><annotation encoding="application/x-tex">p = 0.024</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.024</span></span></span></span>)</td>
+<td>38.8% (+2.5 pts, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.86</mn></mrow><annotation encoding="application/x-tex">p = 0.86</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.86</span></span></span></span>)</td>
+</tr>
+<tr>
+<td><strong>Out-of-distribution 4-site tasks (<code>wide</code>)</strong></td>
+<td>10.0%</td>
+<td><strong>20.0%</strong></td>
+<td><strong>0.0%</strong></td>
+</tr>
+<tr>
+<td><strong>Critical-path latency / exhausted workers</strong></td>
+<td>18.3 calls / 1.18</td>
+<td><strong>14.1 calls / 0.53</strong></td>
+<td>16.8 calls / 1.10</td>
+</tr>
+</tbody>
+</table>
+<p>If you already know how multi-agent RL and GRPO work, skip to <a href="#the-experiment">The experiment</a>.</p>
+<h2 id="part-1-what-is-multi-agent-rl">Part 1: What is multi-agent RL?</h2>
+<h3 id="why-one-agent-isnt-always-the-whole-system">Why one agent isn’t always the whole system</h3>
+<p>In my <a href="/blog/multi-harness-rl">previous post on harness RL</a>, one model worked inside one agent loop at a time: it opened the CSV files, ran Python in a sandbox, and reported an answer.</p>
+<p>Real agent systems often split the job across several agents. An orchestrator breaks a problem into pieces, hands each piece to a sub-agent with its own context window and tools, waits for their replies, and puts the final answer together. If you try to train a system like that on a toy task where one agent could have read all the files itself, communication is just overhead. To make coordination genuinely matter, <strong>no single agent can have enough information to answer alone.</strong></p>
+<p>Here is the environment used in this experiment (<code>org_tasks.py</code> and <code>agents.py</code>):</p>
+<p><img src="./multi-agent-rl/fig_org_loop.svg" alt="What an agent organisation does" loading="lazy"></p>
+<p>Every task is a question about a dataset (<code>orders.csv</code>, <code>employees.csv</code>, or <code>sessions.csv</code>), but the main table is <strong>sharded row-wise across <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> sites</strong> (<code>atlas</code>, <code>boreal</code>, <code>cobalt</code>, …) with uneven random shares. Small lookup tables (<code>customers.csv</code>, <code>departments.csv</code>, <code>users.csv</code>) are copied to every site.</p>
+<p>There are three roles:</p>
+<ol>
+<li><strong>The lead (1 per organisation).</strong> Sees the question, the list of site names, and which file is sharded versus copied. It has <strong>no file or code tools</strong>. Its only actions are <code>ask(site, request)</code> and <code>submit(answer)</code>. If it emits several <code>ask</code> calls in the same turn, the harness runs those workers in parallel (<code>asyncio.gather</code>).</li>
+<li><strong>The workers (1 per site, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>∈</mo><mo stretchy="false">{</mo><mn>2</mn><mo separator="true">,</mo><mn>3</mn><mo separator="true">,</mo><mn>4</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">K \in \{2, 3, 4\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7224em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">3</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">4</span><span class="mclose">}</span></span></span></span>).</strong> Each worker lives inside its own site’s Docker directory (<code>atlas/</code>, <code>boreal/</code>, …) and cannot see the other sites. It has four tools—<code>list_files</code>, <code>read_file</code>, <code>run_python</code>, and <code>reply(message)</code>—and keeps its conversation history if the lead comes back with a follow-up question.</li>
+<li><strong>The solo baseline (1 agent, evaluation only).</strong> Sees all <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> site directories (<code>atlas/employees.csv</code>, <code>boreal/employees.csv</code>, …) mounted inside a single workspace, with the same data tools as a worker plus <code>final_answer(answer)</code>. Same total information, zero communication.</li>
+</ol>
+<h3 id="why-sharded-data-forces-real-coordination">Why sharded data forces real coordination</h3>
+<p>Because the rows are split unevenly across sites, the lead cannot just forward the question to every worker and average their numbers:</p>
+<ul>
+<li><strong>Averages, percentages, and ratios</strong> need per-site numerators and denominators (<code>sum</code> and <code>count</code>), not per-site averages.</li>
+<li><strong>Top-<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span></span></span></span> and argmax questions</strong> (<em>“which product had the highest total quantity?”</em>, <em>“which month had the largest revenue jump?”</em>) need a full per-group breakdown from every site so the lead can sum across sites before picking the winner.</li>
+<li><strong>Distinct counts</strong> (<em>“how many distinct customers ordered in Q3?”</em>) need the customer IDs themselves, because the same customer can appear at more than one site.</li>
+</ul>
+<p>Here is one actual test task (<code>o19900001</code>: average salary in Marketing across <code>atlas</code> and <code>boreal</code>, with duplicate rows in the files) as it plays out in the base model, in the trained organisation, and in the single-agent <code>solo</code> baseline:</p>
+<p><img src="./multi-agent-rl/fig_org_vs_solo.svg" alt="One task inside the organisation vs. solo" loading="lazy"></p>
+<p>Before training, the lead asks each site for its average Marketing salary, gets back <code>$95,085.68</code> and <code>$85,105.62</code>, and averages the two averages to get <code>90,095.65</code>—off by nearly <span class="katex-error" title="ParseError: KaTeX parse error: Unexpected character: &#x27;\&#x27; at position 1: \̲" style="color:#cc0000">\</span>5,000<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">.</mi><mi>A</mi><mi>f</mi><mi>t</mi><mi>e</mi><mi>r</mi><mi>t</mi><mi>r</mi><mi>a</mi><mi>i</mi><mi>n</mi><mi>i</mi><mi>n</mi><mi>g</mi><mo separator="true">,</mo><mi>t</mi><mi>h</mi><mi>e</mi><mi>l</mi><mi>e</mi><mi>a</mi><mi>d</mi><mi>a</mi><mi>s</mi><mi>k</mi><mi>s</mi><mi>e</mi><mi>a</mi><mi>c</mi><mi>h</mi><mi>s</mi><mi>i</mi><mi>t</mi><mi>e</mi><mi>f</mi><mi>o</mi><mi>r</mi><mi>i</mi><mi>t</mi><mi>s</mi><mi>d</mi><mi>e</mi><mi>d</mi><mi>u</mi><mi>p</mi><mi>l</mi><mi>i</mi><mi>c</mi><mi>a</mi><mi>t</mi><mi>e</mi><mi>d</mi><mi>s</mi><mi>a</mi><mi>l</mi><mi>a</mi><mi>r</mi><mi>y</mi><mi>s</mi><mi>u</mi><mi>m</mi><mi>a</mi><mi>n</mi><mi>d</mi><mi>e</mi><mi>m</mi><mi>p</mi><mi>l</mi><mi>o</mi><mi>y</mi><mi>e</mi><mi>e</mi><mi>c</mi><mi>o</mi><mi>u</mi><mi>n</mi><mi>t</mi><mo separator="true">,</mo><mi>a</mi><mi>d</mi><mi>d</mi><mi>s</mi><mi>t</mi><mi>h</mi><mi>e</mi><mi>n</mi><mi>u</mi><mi>m</mi><mi>e</mi><mi>r</mi><mi>a</mi><mi>t</mi><mi>o</mi><mi>r</mi><mi>s</mi><mi>a</mi><mi>n</mi><mi>d</mi><mi>d</mi><mi>e</mi><mi>n</mi><mi>o</mi><mi>m</mi><mi>i</mi><mi>n</mi><mi>a</mi><mi>t</mi><mi>o</mi><mi>r</mi><mi>s</mi><mo separator="true">,</mo><mi>a</mi><mi>n</mi><mi>d</mi><mi>s</mi><mi>u</mi><mi>b</mi><mi>m</mi><mi>i</mi><mi>t</mi><mi>s</mi><mi mathvariant="normal">‘</mi></mrow><annotation encoding="application/x-tex">. After training, the lead asks each site for its deduplicated salary sum and employee count, adds the numerators and denominators, and submits `</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">.</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0278em;">er</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal">ainin</span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">t</span><span class="mord mathnormal">h</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal">e</span><span class="mord mathnormal">a</span><span class="mord mathnormal">d</span><span class="mord mathnormal">a</span><span class="mord mathnormal">s</span><span class="mord mathnormal" style="margin-right:0.0315em;">k</span><span class="mord mathnormal">se</span><span class="mord mathnormal">a</span><span class="mord mathnormal">c</span><span class="mord mathnormal">h</span><span class="mord mathnormal">s</span><span class="mord mathnormal">i</span><span class="mord mathnormal">t</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.1076em;">f</span><span class="mord mathnormal" style="margin-right:0.0278em;">or</span><span class="mord mathnormal">i</span><span class="mord mathnormal">t</span><span class="mord mathnormal">s</span><span class="mord mathnormal">d</span><span class="mord mathnormal">e</span><span class="mord mathnormal">d</span><span class="mord mathnormal">u</span><span class="mord mathnormal" style="margin-right:0.0197em;">pl</span><span class="mord mathnormal">i</span><span class="mord mathnormal">c</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal">e</span><span class="mord mathnormal">d</span><span class="mord mathnormal">s</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0197em;">l</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="mord mathnormal">s</span><span class="mord mathnormal">u</span><span class="mord mathnormal">man</span><span class="mord mathnormal">d</span><span class="mord mathnormal">e</span><span class="mord mathnormal">m</span><span class="mord mathnormal" style="margin-right:0.0197em;">pl</span><span class="mord mathnormal" style="margin-right:0.0359em;">oy</span><span class="mord mathnormal">eeco</span><span class="mord mathnormal">u</span><span class="mord mathnormal">n</span><span class="mord mathnormal">t</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">a</span><span class="mord mathnormal">dd</span><span class="mord mathnormal">s</span><span class="mord mathnormal">t</span><span class="mord mathnormal">h</span><span class="mord mathnormal">e</span><span class="mord mathnormal">n</span><span class="mord mathnormal">u</span><span class="mord mathnormal">m</span><span class="mord mathnormal" style="margin-right:0.0278em;">er</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0278em;">or</span><span class="mord mathnormal">s</span><span class="mord mathnormal">an</span><span class="mord mathnormal">dd</span><span class="mord mathnormal">e</span><span class="mord mathnormal">n</span><span class="mord mathnormal">o</span><span class="mord mathnormal">mina</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.0278em;">or</span><span class="mord mathnormal">s</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">an</span><span class="mord mathnormal">d</span><span class="mord mathnormal">s</span><span class="mord mathnormal">u</span><span class="mord mathnormal">bmi</span><span class="mord mathnormal">t</span><span class="mord mathnormal">s</span><span class="mord">‘</span></span></span></span>85,105.62`.</p>
+<h3 id="one-model-plays-every-role-θthetaθ-as-a-gene-pool">One model plays every role (”<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>θ</mi></mrow><annotation encoding="application/x-tex">\theta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span></span></span></span> as a gene pool”)</h3>
+<p>A natural question is: do we keep one set of model weights for the lead and another set for the workers?</p>
+<p>Following <a href="https://www.gr.inc/avalonm1.pdf">Avalon-M1</a>, <strong>every agent in the organisation is the exact same model (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>π</mi><mi>θ</mi></msub></mrow><annotation encoding="application/x-tex">\pi_\theta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>).</strong> Nothing in the weights says “I am the lead” or “I am the <code>atlas</code> worker.” Roles exist only in the prompt and tool list passed to each call. In Avalon’s phrasing, the parameter vector <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>θ</mi></mrow><annotation encoding="application/x-tex">\theta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span></span></span></span> acts like a <strong>gene pool</strong>: every role draws from the same weights during a rollout, and improvements learned while acting as a worker or as a lead flow back into the same shared parameters.</p>
+<p>That design has an immediate side effect that we can test: <strong>skills learned by workers inside a multi-agent organisation should transfer zero-shot when the same model is run alone as a <code>solo</code> agent</strong>, because <code>solo</code> uses the exact same data tools (<code>list_files</code>, <code>read_file</code>, <code>run_python</code>) as a worker.</p>
+<h2 id="part-2-how-the-training-works">Part 2: How the training works</h2>
+<h3 id="collective-rewards-and-critical-path-latency">Collective rewards and critical-path latency</h3>
+<p>When an organisation of <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>+</mo><mi>K</mi></mrow><annotation encoding="application/x-tex">1 + K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> agents fails a task, who was at fault? Maybe the lead asked for averages instead of sums. Maybe <code>boreal</code> forgot to drop duplicate rows. Maybe <code>cobalt</code> wrote buggy Python six times in a row and ran out of turns.</p>
+<p>Building a separate critic or per-turn judge to assign blame inside a multi-agent conversation is brittle and easy for RL to game. <strong>Reinforcement Learning from Collective Rewards (RLCR)</strong> does the simplest possible thing instead: score only the organisation’s final submitted answer, and give that single score to the whole team.</p>
+<p>For one organisation rollout <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>τ</mi></mrow><annotation encoding="application/x-tex">\tau</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span></span></span></span>, the collective reward in <code>rollout.py</code> is:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>r</mi><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo><mtext>  </mtext><mo>=</mo><mtext>  </mtext><mn mathvariant="double-struck">1</mn><mo stretchy="false">[</mo><mtext>correct</mtext><mo stretchy="false">]</mo><mo>⋅</mo><mo fence="false" stretchy="true" minsize="1.8em" maxsize="1.8em">(</mo><mn>1</mn><mo>+</mo><mn>0.1</mn><mo>⋅</mo><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">p</mi></mrow><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">(</mo><mstyle scriptlevel="0" displaystyle="false"><mfrac><mrow><mn>18</mn><mo>−</mo><msub><mi>L</mi><mtext>crit</mtext></msub><mo stretchy="false">(</mo><mi>τ</mi><mo stretchy="false">)</mo></mrow><mn>14</mn></mfrac></mstyle><mo separator="true">,</mo><mtext> </mtext><mn>0</mn><mo separator="true">,</mo><mtext> </mtext><mn>1</mn><mo fence="false" stretchy="true" minsize="1.2em" maxsize="1.2em">)</mo><mo fence="false" stretchy="true" minsize="1.8em" maxsize="1.8em">)</mo></mrow><annotation encoding="application/x-tex">r(\tau) \;=\; \mathbb{1}[\text{correct}] \cdot \Big(1 + 0.1 \cdot \mathrm{clip}\big(\tfrac{18 - L_{\text{crit}}(\tau)}{14},\, 0,\, 1\big)\Big)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mopen">[</span><span class="mord text"><span class="mord">correct</span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="mord"><span class="delimsizing size2">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.8em;vertical-align:-0.65em;"></span><span class="mord"><span class="mord mathrm">clip</span></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.01em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">14</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">18</span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.334em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">crit</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.1132em;">τ</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mord"><span class="delimsizing size2">)</span></span></span></span></span></span>
+<p>That is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> if the lead’s final answer matches the gold answer on the full clean data, plus an efficiency bonus of up to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.1</mn></mrow><annotation encoding="application/x-tex">0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span> for finishing with a short <strong>critical-path latency</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>crit</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{crit}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">crit</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>, and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> if the answer is wrong.</p>
+<p>Why <em>critical-path</em> latency instead of total model calls? In <code>org_harness</code>, each lead turn costs <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span> call. If the lead asks three workers in the same turn, those three workers run at the same time, so the wall-clock cost of that round is the <strong>slowest</strong> worker (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mrow><mi>max</mi><mo>⁡</mo></mrow><mi>i</mi></msub><msub><mi>L</mi><mrow><mtext>worker</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\max_i L_{\text{worker},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mop"><span class="mop">max</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">worker</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>), not the sum (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mi>i</mi></msub><msub><mi>L</mi><mrow><mtext>worker</mtext><mo separator="true">,</mo><mi>i</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\sum_i L_{\text{worker},i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0497em;vertical-align:-0.2997em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">worker</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>):</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>L</mi><mtext>crit</mtext></msub><mtext>  </mtext><mo>=</mo><mtext>  </mtext><munderover><mo>∑</mo><mrow><mi>t</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>T</mi><mtext>lead</mtext></msub></munderover><mo fence="false" stretchy="true" minsize="1.8em" maxsize="1.8em">(</mo><mn>1</mn><mo>+</mo><munder><mrow><mi>max</mi><mo>⁡</mo></mrow><mrow><mi>i</mi><mo>∈</mo><mtext>asks</mtext><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow></munder><msubsup><mi>L</mi><mrow><mtext>worker</mtext><mo separator="true">,</mo><mi>i</mi></mrow><mrow><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow></msubsup><mo fence="false" stretchy="true" minsize="1.8em" maxsize="1.8em">)</mo></mrow><annotation encoding="application/x-tex">L_{\text{crit}} \;=\; \sum_{t=1}^{T_{\text{lead}}} \Big(1 + \max_{i \in \text{asks}(t)} L_{\text{worker},i}^{(t)}\Big)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3175em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">crit</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:3.1123em;vertical-align:-1.2671em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8452em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.3169em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.1389em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">lead</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2671em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="delimsizing size2">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:2.116em;vertical-align:-0.966em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4306em;"><span style="top:-2.309em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">∈</span><span class="mord text mtight"><span class="mord mtight">asks</span></span><span class="mopen mtight">(</span><span class="mord mathnormal mtight">t</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.966em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.3987em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">worker</span></span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">i</span></span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight">t</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4374em;"><span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size2">)</span></span></span></span></span></span>
+<p>Measuring latency along the critical path rewards two coordination habits at once: the lead earns a higher reward by <strong>fanning out requests to all sites in parallel</strong> instead of polling sites one by one, and workers earn a higher reward by <strong>answering in one clean script</strong> instead of dragging out the slowest branch.</p>
+<h3 id="grpo-across-organisations-and-who-gets-the-advantage">GRPO across organisations, and who gets the advantage</h3>
+<p>To turn rewards into a learning signal without a value network, <code>train.py</code> uses <strong>GRPO</strong> (Group Relative Policy Optimization). For each training task, we spin up <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>=</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">G = 6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">G</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span> independent organisations in parallel, score each organisation’s final answer, and compare the 6 attempts against each other:</p>
+<p><img src="./multi-agent-rl/fig_rlcr_grpo.svg" alt="One GRPO group of organisations" loading="lazy"></p>
+<p>Organisation <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span></span></span></span>‘s collective advantage is how many standard deviations its reward sits above or below the group mean:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mtext>  </mtext><mo>=</mo><mtext>  </mtext><mfrac><mrow><msub><mi>r</mi><mi>g</mi></msub><mo>−</mo><mover accent="true"><mi>r</mi><mo>ˉ</mo></mover></mrow><mrow><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>σ</mi><mi>r</mi></msub><mo separator="true">,</mo><mtext> </mtext><mn>0.05</mn><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">A_g \;=\; \frac{r_g - \bar r}{\max(\sigma_r,\, 0.05)}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.1963em;vertical-align:-0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.2603em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">max</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.05</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.5678em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.1944em;"><span class="mord">ˉ</span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>
+<p>If all 6 organisations get the task wrong (or all 6 get the exact same score), <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>σ</mi><mi>r</mi></msub><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\sigma_r = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">σ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span>, the group is “flat”, and it is dropped from the gradient step. Otherwise, we have a choice about <strong>who inside organisation <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span></span></span></span> receives <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub></mrow><annotation encoding="application/x-tex">A_g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></strong> (<code>collective_samples</code> in <code>rollout.py</code>):</p>
+<ul>
+<li><strong><code>--train-roles all</code> (Avalon-M1 RLCR).</strong> Every token sampled by the lead <em>and</em> every token sampled by all <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> workers in organisation <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0359em;">g</span></span></span></span> gets the same advantage <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub></mrow><annotation encoding="application/x-tex">A_g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>. If the organisation succeeded, both the lead’s decomposition and the workers’ Python scripts are reinforced; if it failed, both are pushed down.</li>
+<li><strong><code>--train-roles lead</code> (Kimi PARL style).</strong> Only the lead’s sampled tokens get <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub></mrow><annotation encoding="application/x-tex">A_g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span>; worker trajectories are masked out. This treats the workers as a frozen environment and asks whether training the orchestrator alone is enough.</li>
+</ul>
+<h3 id="lora-fitting-a-multi-agent-trainer-and-vllm-on-one-24-gb-gpu">LoRA: fitting a multi-agent trainer and vLLM on one 24 GB GPU</h3>
+<p>In a single-agent run, one rollout is one conversation. In a multi-agent run, one rollout with <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">K=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span> sites is <strong>four</strong> separate multi-turn conversations (1 lead + 3 workers), totaling ~10,000–12,000 tokens per rollout, or ~250,000 tokens across a batch of 24 organisations. Meanwhile, the vLLM inference server is already sitting on 45% of the RTX 3090 Ti’s 24 GB of VRAM.</p>
+<p>Full-parameter fine-tuning of a 2.6B model (plus AdamW momentum and variance states) would blow past 24 GB immediately. Instead, <code>train.py</code> uses <strong>LoRA</strong> (Low-Rank Adaptation): freeze all <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2.697</mn><mtext>B</mtext></mrow><annotation encoding="application/x-tex">2.697\text{B}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">2.697</span><span class="mord text"><span class="mord">B</span></span></span></span></span> base weights <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mn>0</mn></msub><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><msub><mi>d</mi><mtext>out</mtext></msub><mo>×</mo><msub><mi>d</mi><mtext>in</mtext></msub></mrow></msup></mrow><annotation encoding="application/x-tex">W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2963em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">out</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mbin mtight">×</span><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.334em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">in</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span> in bfloat16, and attach a trainable low-rank update to each linear projection:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>W</mi><mtext>  </mtext><mo>=</mo><mtext>  </mtext><msub><mi>W</mi><mn>0</mn></msub><mo>+</mo><mfrac><mi>α</mi><mi>r</mi></mfrac><mtext> </mtext><mi>B</mi><mi>A</mi><mo separator="true">,</mo><mspace width="2em"></mspace><mi>A</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><mi>r</mi><mo>×</mo><msub><mi>d</mi><mtext>in</mtext></msub></mrow></msup><mo separator="true">,</mo><mtext>  </mtext><mi>B</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><msub><mi>d</mi><mtext>out</mtext></msub><mo>×</mo><mi>r</mi></mrow></msup></mrow><annotation encoding="application/x-tex">W \;=\; W_0 + \frac{\alpha}{r}\, B A, \qquad A \in \mathbb{R}^{r \times d_{\text{in}}},\; B \in \mathbb{R}^{d_{\text{out}} \times r}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.7936em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1076em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0278em;">r</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal">A</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0935em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span><span class="mbin mtight">×</span><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.334em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">in</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8991em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2963em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">out</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span></span></span></span></span></span></span></span></span></span>
+<p>Here <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>32</mn></mrow><annotation encoding="application/x-tex">r = 32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">32</span></span></span></span> and <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>=</mo><mn>32</mn></mrow><annotation encoding="application/x-tex">\alpha = 32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">32</span></span></span></span> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mi mathvariant="normal">/</mi><mi>r</mi><mo>=</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\alpha/r = 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span>) across all seven attention and MLP projections in every layer (<code>q_proj</code>, <code>k_proj</code>, <code>v_proj</code>, <code>out_proj</code>, <code>w1</code>, <code>w2</code>, <code>w3</code>). That comes to <strong>40,271,872 trainable parameters</strong>—just <strong>1.47%</strong> of the 2.74B total—so the AdamW state and gradients comfortably fit alongside vLLM in ~10.6 GB of peak trainer VRAM.</p>
+<h3 id="the-capture-proxy-and-three-lfm2-implementation-details">The capture proxy and three LFM2 implementation details</h3>
+<p>Just like in <code>rl_harness</code>, the harnesses in <code>agents.py</code> never touch PyTorch or tokenizers. Each agent in rollout <code>rid</code> is handed its own OpenAI-compatible URL—<code>http://127.0.0.1:8100/r/&#x3C;rid>-lead/v1</code>, <code>/r/&#x3C;rid>-atlas/v1</code>, <code>/r/&#x3C;rid>-boreal/v1</code>—pointing at <code>CaptureProxy</code> (<code>proxy.py</code>):</p>
+<p><img src="./multi-agent-rl/fig_system.svg" alt="System overview" loading="lazy"></p>
+<p>The proxy renders each agent’s chat messages with the model’s chat template, forwards the <strong>exact token IDs</strong> to vLLM’s <code>/v1/completions</code>, and records <code>(prompt_ids, completion_ids, vllm_logprobs)</code> under that agent’s ID.</p>
+<p>Because neither the lead nor the workers ever compact or rewrite their history, every new turn of an agent extends its previous turn token-for-token (<code>proxy.n_extended</code>). At the end of the rollout, <code>to_rows</code> stitches each agent’s calls into <strong>one training row</strong>, so a 3-site organisation becomes 4 rows (1 lead row + 3 worker rows):</p>
+<p><img src="./multi-agent-rl/fig_tokens.svg" alt="How an organisation rollout becomes training rows" loading="lazy"></p>
+<p>The trainer then minimizes the truncated importance-sampling policy gradient loss over all sampled tokens (<code>mask = 1</code>) in the selected roles:</p>
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="script">L</mi><mo stretchy="false">(</mo><mi>θ</mi><mo stretchy="false">)</mo><mtext>  </mtext><mo>=</mo><mtext>  </mtext><mo>−</mo><mfrac><mn>1</mn><mi>N</mi></mfrac><munder><mo>∑</mo><mrow><mi>a</mi><mo>∈</mo><mtext>roles</mtext></mrow></munder><munder><mo>∑</mo><mrow><mi>t</mi><mo>:</mo><mtext> </mtext><msub><mi>m</mi><mrow><mi>a</mi><mo separator="true">,</mo><mi>t</mi></mrow></msub><mo>=</mo><mn>1</mn></mrow></munder><mi>min</mi><mo>⁡</mo><mtext> ⁣</mtext><mo fence="false" stretchy="true" minsize="1.8em" maxsize="1.8em">(</mo><mfrac><mrow><msub><mi>π</mi><mi>θ</mi></msub><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mi>a</mi><mo separator="true">,</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow><mrow><mi>μ</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mi>a</mi><mo separator="true">,</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow></mfrac><mo separator="true">,</mo><mtext> </mtext><mn>2</mn><mo fence="false" stretchy="true" minsize="1.8em" maxsize="1.8em">)</mo><mtext> </mtext><msub><mi>A</mi><mi>g</mi></msub><mtext> </mtext><mi>log</mi><mo>⁡</mo><msub><mi>π</mi><mi>θ</mi></msub><mo stretchy="false">(</mo><msub><mi>y</mi><mrow><mi>a</mi><mo separator="true">,</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathcal{L}(\theta) \;=\; -\frac{1}{N}\sum_{a \in \text{roles}} \sum_{t:\, m_{a,t}=1} \min\!\Big(\frac{\pi_\theta(y_{a,t})}{\mu(y_{a,t})},\, 2\Big)\, A_g \,\log \pi_\theta(y_{a,t})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathcal">L</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.0278em;">θ</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.8914em;vertical-align:-1.4644em;"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3214em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.109em;">N</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8479em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mrel mtight">∈</span><span class="mord text mtight"><span class="mord mtight">roles</span></span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3295em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8829em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mrel mtight">:</span><span class="mspace mtight" style="margin-right:0.1952em;"></span><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2963em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2819em;"><span></span></span></span></span></span></span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4644em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">min</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9721em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">2</span><span class="mord"><span class="delimsizing size2">)</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">lo<span style="margin-right:0.0139em;">g</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">π</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">θ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0359em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">a</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+<p>Three hardware and architecture details matter here:</p>
+<ol>
+<li><strong>Merged-weight sync (<code>--sync merge</code>).</strong> Normally you would keep the base model in vLLM and hot-swap the 80 MB LoRA adapter each step. On this machine, vLLM’s LoRA decode path for <code>LFM2.5-2.6B</code> is about <strong>15× slower</strong> than base-model decode. So after every gradient step, <code>publish_merged</code> folds <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mi>α</mi><mi>r</mi></mfrac><mi>B</mi><mi>A</mi></mrow><annotation encoding="application/x-tex">\frac{\alpha}{r}BA</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0404em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6954em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0278em;">r</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.0037em;">α</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord mathnormal" style="margin-right:0.0502em;">B</span><span class="mord mathnormal">A</span></span></span></span> into the base weights in memory, writes <code>policy/model.safetensors</code>, and hits vLLM’s <code>/collective_rpc</code> (<code>reload_weights</code>) plus <code>/reset_prefix_cache</code>. Reloading the 5 GB file takes ~2 seconds and keeps generation at full speed.</li>
+<li><strong>No sequence packing.</strong> <code>LFM2.5-2.6B</code> is a hybrid architecture that interleaves gated short-convolution (<code>Lfm2ShortConv</code>) layers with SDPA attention layers. If you pack two different agents’ rows into a single 1D sequence to save padding, the short-conv kernel leaks state across the boundary between agent 1 and agent 2. Every agent row is therefore forwarded as its own clean sequence with activation checkpointing.</li>
+<li><strong>Tandem-repeat masking (<code>tandem_repeat</code>).</strong> In a multi-agent rollout, one worker can occasionally get stuck repeating a short phrase until it hits <code>max_tokens</code>, while the rest of the organisation still manages to guess or compute the right answer. Without protection, a positive collective advantage <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>g</mi></msub><mo>></mo><mn>0</mn></mrow><annotation encoding="application/x-tex">A_g > 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.0359em;">g</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span> would reinforce the degenerate loop. <code>to_rows</code> detects any call ending in <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≥</mo><mn>300</mn></mrow><annotation encoding="application/x-tex">\ge 300</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">300</span></span></span></span> tokens of a repeating <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mtext>–</mtext><mn>32</mn></mrow><annotation encoding="application/x-tex">1\text{–}32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mord text"><span class="mord">–</span></span><span class="mord">32</span></span></span></span> token period and zeros out its loss mask.</li>
+</ol>
+<h2 id="the-experiment">The experiment</h2>
+<h3 id="setup-on-one-gpu">Setup on one GPU</h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th><code>org_small</code> (train all roles)</th>
+<th><code>org_small_lead</code> (train lead only)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Model</strong></td>
+<td><code>LiquidAI/LFM2.5-2.6B</code> (shared across lead, workers, and solo)</td>
+<td>same</td>
+</tr>
+<tr>
+<td><strong>Hardware</strong></td>
+<td>1× RTX 3090 Ti (24 GB); vLLM holds 45%, trainer uses ~10.6 GB</td>
+<td>same</td>
+</tr>
+<tr>
+<td><strong>Trained roles</strong></td>
+<td><code>--train-roles all</code> (<code>lead</code> + all <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> <code>worker</code>s)</td>
+<td><code>--train-roles lead</code> (<code>lead</code> only; worker rows dropped)</td>
+</tr>
+<tr>
+<td><strong>One step</strong></td>
+<td>4 tasks × 6 organisations = 24 multi-agent rollouts</td>
+<td>exact same 4 tasks/step (same RNG seed) × 6 = 24 rollouts</td>
+</tr>
+<tr>
+<td><strong>Training</strong></td>
+<td>30 steps (120 tasks, 720 org rollouts), LoRA <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>32</mn></mrow><annotation encoding="application/x-tex">r=32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0278em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">32</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>lr</mtext><mo>=</mo><mn>4</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\text{lr}=4\times10^{-5}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">lr</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">5</span></span></span></span></span></span></span></span></span></span></span></span>, temp <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.0</mn></mrow><annotation encoding="application/x-tex">1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.0</span></span></span></span></td>
+<td>same</td>
+</tr>
+<tr>
+<td><strong>Evaluation</strong></td>
+<td>steps 0, 5, 10, 20, 30 on 40 <code>org</code> + 40 <code>solo</code> tasks (temp <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.7</mn></mrow><annotation encoding="application/x-tex">0.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.7</span></span></span></span>)</td>
+<td>steps 0, 10, 20, 30 on the same 40 <code>org</code> + 40 <code>solo</code> tasks</td>
+</tr>
+<tr>
+<td><strong>Wall clock</strong></td>
+<td>~3.6 hours (median step: 251s rollout + 182s train)</td>
+<td>~3.3 hours (median step: 315s rollout + 57s train)</td>
+</tr>
+</tbody>
+</table>
+<p>Why is the backward pass 3× faster in <code>org_small_lead</code> (<code>57s</code> vs <code>182s</code>)? Because dropping the worker rows leaves only the lead’s conversation (~12–18 rows and ~55k tokens per step, versus ~45–80 rows and ~160k tokens per step when training all agents).</p>
+<h3 id="the-partitioned-test-splits">The partitioned test splits</h3>
+<p>Training tasks only ever use <strong>2 or 3 sites</strong> (<code>TRAIN_SITES = (2, 3)</code>) on retail and HR templates (20% easy, 40% medium, 40% hard; 57% with messy files: duplicate rows <code>dup</code>, currency strings <code>money</code>, inconsistent casing <code>case</code>, or mixed date formats <code>dates</code>).</p>
+<p>The test set (<code>make_org_test(10)</code>) has 40 tasks, split into four buckets of 10 tasks each, and every evaluation runs each task twice—once as a multi-agent organisation (<code>org</code>) and once as a single agent (<code>solo</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Test bucket</th>
+<th>Sites <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span></th>
+<th>What it measures</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>seen</strong> (10 tasks)</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext>–</mtext><mn>3</mn></mrow><annotation encoding="application/x-tex">2\text{–}3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mord text"><span class="mord">–</span></span><span class="mord">3</span></span></span></span></td>
+<td>training templates on fresh shards</td>
+<td><em>”What is the average salary of Marketing employees?“</em></td>
+</tr>
+<tr>
+<td><strong>tmpl</strong> (10)</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext>–</mtext><mn>3</mn></mrow><annotation encoding="application/x-tex">2\text{–}3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mord text"><span class="mord">–</span></span><span class="mord">3</span></span></span></span></td>
+<td>held-out retail/HR templates never trained on</td>
+<td><em>”Which month of 2024 had the largest revenue increase over the previous month?“</em></td>
+</tr>
+<tr>
+<td><strong>domain</strong> (10)</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mtext>–</mtext><mn>3</mn></mrow><annotation encoding="application/x-tex">2\text{–}3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span><span class="mord text"><span class="mord">–</span></span><span class="mord">3</span></span></span></span></td>
+<td>held-out <strong>web</strong> domain (<code>sessions.csv</code>, <code>users.csv</code>)</td>
+<td><em>“What percentage of sessions used mobile?“</em></td>
+</tr>
+<tr>
+<td><strong>wide</strong> (10)</td>
+<td><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn></mrow><annotation encoding="application/x-tex">4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></strong></td>
+<td><strong>more workers than ever seen in training</strong> (<code>atlas</code>, <code>boreal</code>, <code>delta</code>, <code>fjord</code>)</td>
+<td><em>“How many employees were hired after 2013 across all 4 sites?”</em></td>
+</tr>
+</tbody>
+</table>
+<h2 id="results">Results</h2>
+<h3 id="1-accuracy-over-training-all-roles-vs-lead-only">1. Accuracy over training: all roles vs. lead only</h3>
+<p><img src="./multi-agent-rl/fig_eval_curves.png" alt="Held-out accuracy over training" loading="lazy"></p>
+<table>
+<thead>
+<tr>
+<th>Run (<code>--train-roles</code>)</th>
+<th>Step</th>
+<th><code>org</code> all (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</th>
+<th><code>org</code> seen</th>
+<th><code>org</code> tmpl</th>
+<th><code>org</code> domain</th>
+<th><code>org</code> wide (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">K=4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span>)</th>
+<th><code>solo</code> all (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</th>
+<th><code>solo</code> seen</th>
+<th><code>solo</code> tmpl</th>
+<th><code>solo</code> domain</th>
+<th><code>solo</code> wide</th>
+<th>Combined (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">n=80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">80</span></span></span></span>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>All roles (<code>org_small</code>)</strong></td>
+<td>0</td>
+<td>22.5%</td>
+<td>20%</td>
+<td>40%</td>
+<td>20%</td>
+<td>10%</td>
+<td>45.0%</td>
+<td>50%</td>
+<td>40%</td>
+<td>40%</td>
+<td>50%</td>
+<td>33.8%</td>
+</tr>
+<tr>
+<td><strong>All roles (<code>org_small</code>)</strong></td>
+<td>5</td>
+<td>25.0%</td>
+<td>30%</td>
+<td>20%</td>
+<td>50%</td>
+<td>0%</td>
+<td>40.0%</td>
+<td>50%</td>
+<td>60%</td>
+<td>20%</td>
+<td>30%</td>
+<td>32.5%</td>
+</tr>
+<tr>
+<td><strong>All roles (<code>org_small</code>)</strong></td>
+<td>10</td>
+<td>30.0%</td>
+<td>20%</td>
+<td>40%</td>
+<td>50%</td>
+<td>10%</td>
+<td>45.0%</td>
+<td>60%</td>
+<td>50%</td>
+<td>40%</td>
+<td>30%</td>
+<td>37.5%</td>
+</tr>
+<tr>
+<td><strong>All roles (<code>org_small</code>)</strong></td>
+<td>20</td>
+<td><strong>37.5%</strong></td>
+<td>40%</td>
+<td><strong>60%</strong></td>
+<td>40%</td>
+<td>10%</td>
+<td>42.5%</td>
+<td>20%</td>
+<td>40%</td>
+<td>50%</td>
+<td>60%</td>
+<td>40.0%</td>
+</tr>
+<tr>
+<td><strong>All roles (<code>org_small</code>)</strong></td>
+<td><strong>30</strong></td>
+<td><strong>37.5%</strong></td>
+<td>30%</td>
+<td><strong>60%</strong></td>
+<td><strong>40%</strong></td>
+<td><strong>20%</strong></td>
+<td><strong>62.5%</strong></td>
+<td><strong>70%</strong></td>
+<td><strong>70%</strong></td>
+<td><strong>70%</strong></td>
+<td>40%</td>
+<td><strong>50.0%</strong></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>)</strong></td>
+<td>0</td>
+<td>30.0%</td>
+<td>30%</td>
+<td>50%</td>
+<td>20%</td>
+<td>20%</td>
+<td>42.5%</td>
+<td>30%</td>
+<td>30%</td>
+<td>40%</td>
+<td>70%</td>
+<td>36.2%</td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>)</strong></td>
+<td>10</td>
+<td>12.5%</td>
+<td>0%</td>
+<td>20%</td>
+<td>20%</td>
+<td>10%</td>
+<td>37.5%</td>
+<td>0%</td>
+<td>70%</td>
+<td>30%</td>
+<td>50%</td>
+<td>25.0%</td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>)</strong></td>
+<td>20</td>
+<td>27.5%</td>
+<td>20%</td>
+<td>30%</td>
+<td>50%</td>
+<td>10%</td>
+<td>42.5%</td>
+<td>60%</td>
+<td>50%</td>
+<td>20%</td>
+<td>40%</td>
+<td>35.0%</td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>)</strong></td>
+<td><strong>30</strong></td>
+<td><strong>27.5%</strong></td>
+<td>40%</td>
+<td>40%</td>
+<td>30%</td>
+<td><strong>0%</strong></td>
+<td><strong>50.0%</strong></td>
+<td>50%</td>
+<td>30%</td>
+<td>70%</td>
+<td>50%</td>
+<td><strong>38.8%</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>(Note on step 0: both runs start from the exact same base <code>LFM2.5-2.6B</code> weights, but evaluation samples at temperature <code>0.7</code>, so the two independent step-0 evaluations differ by a few tasks—9/40 vs 12/40 on <code>org</code>, 18/40 vs 17/40 on <code>solo</code>.)</em></p>
+<p>Here is the paired task-by-task comparison (exact two-sided McNemar sign test):</p>
+<table>
+<thead>
+<tr>
+<th>Comparison</th>
+<th>Mode</th>
+<th>Before / Run A</th>
+<th>After / Run B</th>
+<th>Fixed / Won</th>
+<th>Broken / Lost</th>
+<th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span></span></span></span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>All roles (<code>org_small</code>): step 0 → 30</strong></td>
+<td><code>org</code> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</td>
+<td>22.5% (<code>9/40</code>)</td>
+<td><strong>37.5% (<code>15/40</code>)</strong></td>
+<td>8</td>
+<td>2</td>
+<td>0.109</td>
+</tr>
+<tr>
+<td><strong>All roles (<code>org_small</code>): step 0 → 30</strong></td>
+<td><code>solo</code> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</td>
+<td>45.0% (<code>18/40</code>)</td>
+<td><strong>62.5% (<code>25/40</code>)</strong></td>
+<td>13</td>
+<td>6</td>
+<td>0.167</td>
+</tr>
+<tr>
+<td><strong>All roles (<code>org_small</code>): step 0 → 30</strong></td>
+<td><strong>both (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">n=80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">80</span></span></span></span>)</strong></td>
+<td><strong>33.8% (<code>27/80</code>)</strong></td>
+<td><strong>50.0% (<code>40/80</code>)</strong></td>
+<td><strong>21</strong></td>
+<td><strong>8</strong></td>
+<td><strong>0.024</strong></td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>): step 0 → 30</strong></td>
+<td><code>org</code> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</td>
+<td>30.0% (<code>12/40</code>)</td>
+<td>27.5% (<code>11/40</code>)</td>
+<td>4</td>
+<td>5</td>
+<td>1.000</td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>): step 0 → 30</strong></td>
+<td><code>solo</code> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</td>
+<td>42.5% (<code>17/40</code>)</td>
+<td>50.0% (<code>20/40</code>)</td>
+<td>12</td>
+<td>9</td>
+<td>0.664</td>
+</tr>
+<tr>
+<td><strong>Lead only (<code>org_small_lead</code>): step 0 → 30</strong></td>
+<td><strong>both (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">n=80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">80</span></span></span></span>)</strong></td>
+<td>36.2% (<code>29/80</code>)</td>
+<td>38.8% (<code>31/80</code>)</td>
+<td>16</td>
+<td>14</td>
+<td>0.856</td>
+</tr>
+<tr>
+<td><strong>Step 30 head-to-head: <code>all</code> vs <code>lead</code></strong></td>
+<td><code>org</code> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</td>
+<td>27.5% (<code>lead</code>)</td>
+<td><strong>37.5% (<code>all</code>)</strong></td>
+<td>7</td>
+<td>3</td>
+<td>0.344</td>
+</tr>
+<tr>
+<td><strong>Step 30 head-to-head: <code>all</code> vs <code>lead</code></strong></td>
+<td><code>solo</code> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</td>
+<td>50.0% (<code>lead</code>)</td>
+<td><strong>62.5% (<code>all</code>)</strong></td>
+<td>10</td>
+<td>5</td>
+<td>0.302</td>
+</tr>
+<tr>
+<td><strong>Step 30 head-to-head: <code>all</code> vs <code>lead</code></strong></td>
+<td><strong>both (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">n=80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">80</span></span></span></span>)</strong></td>
+<td>38.8% (<code>lead</code>)</td>
+<td><strong>50.0% (<code>all</code>)</strong></td>
+<td><strong>17</strong></td>
+<td><strong>8</strong></td>
+<td>0.108</td>
+</tr>
+</tbody>
+</table>
+<p>Three things stand out right away:</p>
+<ol>
+<li><strong>Training all roles (<code>org_small</code>) improves both <code>org</code> and <code>solo</code>.</strong> Multi-agent <code>org</code> accuracy rises monotonically at every checkpoint (<code>22.5% → 25.0% → 30.0% → 37.5%</code>), fixing 8 test tasks and breaking only 2. Held-out templates (<code>tmpl</code>) go from <code>40%</code> to <code>60%</code>, the unseen <code>web</code> domain doubles from <code>20%</code> to <code>40%</code>, and 4-site <code>wide</code> tasks double from <code>10%</code> to <code>20%</code>.</li>
+<li><strong>Training only the lead (<code>org_small_lead</code>) stalls completely on <code>org</code>.</strong> At step 10, <code>org</code> accuracy actually drops to <code>12.5%</code> (as site coverage falls to <code>0.78</code> and 9 rollouts time out), before recovering to <code>27.5%</code> at steps 20 and 30—1 task below where it started (<code>4</code> fixed, <code>5</code> broken). On 4-site <code>wide</code> tasks, it scores <strong>0/10</strong>.</li>
+<li><strong>Zero-shot <code>solo</code> transfer is much stronger when workers are trained (<code>62.5%</code> vs <code>50.0%</code>).</strong> Neither run ever trained on <code>solo</code>. Why did training multi-agent workers make the model so much better at working alone?</li>
+</ol>
+<h3 id="2-why-training-only-the-lead-failed-the-workers-are-half-the-bottleneck">2. Why training only the lead failed: the workers are half the bottleneck</h3>
+<p>In frontier-model papers like Kimi PARL, freezing sub-agents and training only the orchestrator works because a 100B+ base model already knows how to run a Python snippet without shooting itself in the foot. A 2.6B model does not.</p>
+<p>Look at what happens inside the workers over training (<code>summarize</code> in <code>rollout.py</code>):</p>
+<p><img src="./multi-agent-rl/fig_coordination.png" alt="What changed inside the organisation" loading="lazy"></p>
+<table>
+<thead>
+<tr>
+<th>Coordination metric (<code>org</code> eval, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>40</mn></mrow><annotation encoding="application/x-tex">n=40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span>)</th>
+<th>Base model (step 0)</th>
+<th>Train lead only (step 30)</th>
+<th>Train all roles (step 30)</th>
+<th>Change in <code>all</code> (0 → 30)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Critical-path latency (model calls)</strong></td>
+<td>18.3</td>
+<td>16.8</td>
+<td><strong>14.1</strong></td>
+<td><strong>−22.8%</strong></td>
+</tr>
+<tr>
+<td><strong>Exhausted workers per task (hit 6-turn cap)</strong></td>
+<td>1.18</td>
+<td>1.10</td>
+<td><strong>0.53</strong></td>
+<td><strong>−55.3%</strong></td>
+</tr>
+<tr>
+<td><strong>Worker model calls per task (sum across sites)</strong></td>
+<td>19.8</td>
+<td>18.4</td>
+<td><strong>14.4</strong></td>
+<td><strong>−27.3%</strong></td>
+</tr>
+<tr>
+<td><strong>Worker sandbox tool calls per task</strong></td>
+<td>18.9</td>
+<td>17.4</td>
+<td><strong>12.8</strong></td>
+<td><strong>−32.5%</strong></td>
+</tr>
+<tr>
+<td><strong>Worker plain-text reply fallbacks per task</strong></td>
+<td>3.20</td>
+<td>2.88</td>
+<td><strong>2.35</strong></td>
+<td><strong>−26.6%</strong></td>
+</tr>
+<tr>
+<td><strong>Worker generated tokens per task</strong></td>
+<td>9,320</td>
+<td>9,103</td>
+<td><strong>7,224</strong></td>
+<td><strong>−22.5%</strong></td>
+</tr>
+<tr>
+<td><strong>Lead generated tokens per task</strong></td>
+<td>2,829</td>
+<td>2,121</td>
+<td><strong>2,374</strong></td>
+<td><strong>−16.1%</strong></td>
+</tr>
+<tr>
+<td><strong>Org episodes hitting <code>max_turns</code> (out of 40)</strong></td>
+<td>6</td>
+<td>5</td>
+<td><strong>1</strong></td>
+<td><strong>−83.3%</strong></td>
+</tr>
+<tr>
+<td><strong>Solo episodes hitting <code>max_turns</code> (out of 40)</strong></td>
+<td>9</td>
+<td>10</td>
+<td><strong>3</strong></td>
+<td><strong>−66.7%</strong></td>
+</tr>
+<tr>
+<td><strong>Eval wall-clock time (80 rollouts)</strong></td>
+<td>469 s</td>
+<td>434 s</td>
+<td><strong>332 s</strong></td>
+<td><strong>−29.2%</strong></td>
+</tr>
+</tbody>
+</table>
+<p>That table is the whole story of the ablation:</p>
+<ul>
+<li>
+<p><strong>When workers are not trained (<code>org_small_lead</code>), worker behavior barely moves.</strong> At step 0, an average organisation rollout had <code>1.18</code> workers hit their 6-turn limit without calling <code>reply()</code>, made <code>18.9</code> sandbox tool calls, and wrote <code>9,320</code> worker tokens. After 30 steps of lead-only training, workers still hit their turn limit <strong><code>1.10</code> times per task</strong>, make <strong><code>17.4</code> tool calls</strong>, and write <strong><code>9,103</code> tokens</strong>. On tasks like <code>o19900001</code> (<code>avg_salary_dept</code>) and <code>o20000001</code> (<code>n_city</code>), the lead in <code>org_small_lead</code> asks sensible questions, but 3 worker calls exhaust their 6-turn cap trying to join the tables, and the whole organisation times out at <code>latency = 30–34</code>.</p>
+</li>
+<li>
+<p><strong>When all roles are trained (<code>org_small</code>), workers learn to write one clean script and reply.</strong> Worker turn exhaustion drops by more than half (<code>1.18 → 0.53</code>), worker tool calls drop by a third (<code>18.9 → 12.8</code>), and organisation <code>max_turns</code> timeouts drop from <code>6/40</code> to <strong><code>1/40</code></strong>.</p>
+</li>
+<li>
+<p><strong>This also explains the zero-shot <code>solo</code> jump (<code>45.0% → 62.5%</code>).</strong> Look at the tool schemas in <code>agents.py</code>:</p>
+<ul>
+<li><code>lead</code> only ever sees <code>ask(site, request)</code> and <code>submit(answer)</code>.</li>
+<li><code>worker</code> uses <code>list_files</code>, <code>read_file</code>, <code>run_python</code>, and <code>reply(message)</code>.</li>
+<li><code>solo</code> uses <code>list_files</code>, <code>read_file</code>, <code>run_python</code>, and <code>final_answer(answer)</code>.</li>
+</ul>
+<p>When you train with <code>--train-roles lead</code>, the model <strong>never gets a single gradient update on <code>run_python</code> or <code>read_file</code></strong>. So when <code>org_small_lead</code> is tested in <code>solo</code> mode, it still hits the 10-turn limit on <code>10/40</code> tasks (and on <code>o20000005</code> it prints a raw <code>&#x3C;|tool_call_start|>[run_python(...)]</code> string as its final text). When you train with <code>--train-roles all</code>, every successful worker trajectory trains the exact data-inspection and pandas skills that <code>solo</code> needs, cutting <code>solo</code> turn-limit failures from <code>9/40</code> to <code>3/40</code>.</p>
+</li>
+</ul>
+<h3 id="3-which-tasks-improved">3. Which tasks improved?</h3>
+<p><img src="./multi-agent-rl/fig_breakdown.png" alt="Accuracy by site count, difficulty, and data mess" loading="lazy"></p>
+<table>
+<thead>
+<tr>
+<th>Slice</th>
+<th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">n</span></span></span></span></th>
+<th>Base (step 0)</th>
+<th>Lead only (step 30)</th>
+<th>All roles (step 30)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Org by site count</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">K=2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">K=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">K=4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span> (<code>wide</code>)</td>
+<td>12 / 18 / 10</td>
+<td>17% / 33% / 10%</td>
+<td>42% / 33% / <strong>0%</strong></td>
+<td><strong>42% / 44% / 20%</strong></td>
+</tr>
+<tr>
+<td><strong>Solo by site count</strong>: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">K=2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">K=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span> / <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">K=4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span> (<code>wide</code>)</td>
+<td>12 / 18 / 10</td>
+<td>25% / 56% / 50%</td>
+<td>50% / 50% / 50%</td>
+<td><strong>75% / 67% / 40%</strong></td>
+</tr>
+<tr>
+<td><strong>Difficulty (<code>org + solo</code>)</strong>: easy / medium / hard</td>
+<td>20 / 32 / 28</td>
+<td>50% / 34% / 21%</td>
+<td>45% / 44% / 29%</td>
+<td><strong>70% / 59% / 25%</strong></td>
+</tr>
+<tr>
+<td><strong>Messy files (<code>org + solo</code>)</strong>: clean / 1 mess / 2 messes</td>
+<td>38 / 26 / 16</td>
+<td>45% / 27% / 19%</td>
+<td>50% / 31% / 25%</td>
+<td><strong>61% / 54% / 19%</strong></td>
+</tr>
+<tr>
+<td><strong>Specific mess kinds</strong>: <code>dup</code> / <code>case</code> / <code>dates</code></td>
+<td>16 / 16 / 6</td>
+<td>19% / 25% / 0%</td>
+<td>38% / 12% / 17%</td>
+<td><strong>31% / 44% / 33%</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">K=4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span> (<code>wide</code>) is the sharpest test of worker reliability.</strong> If a single worker has a 25% chance of botching its script or phrasing its reply badly, a 2-site organisation has a <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0.75</mn><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo>=</mo><mn>56</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">(0.75)^2 = 56\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0.75</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">56%</span></span></span></span> chance that both workers behave cleanly, whereas a 4-site organisation has only a <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0.75</mn><msup><mo stretchy="false">)</mo><mn>4</mn></msup><mo>=</mo><mn>32</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">(0.75)^4 = 32\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0.75</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">4</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">32%</span></span></span></span> chance.</p>
+<p>Task <code>o20200003</code> (<code>wide/hr/n_hired_after</code>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">K=4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span>: <em>“How many employees were hired after 2013?”</em>, gold <code>156</code>) shows this failure mode directly. In <code>org_small</code> (all roles trained), the lead fans out to all 4 sites in turn 1, the 4 workers return <code>28</code>, <code>32</code>, <code>19</code>, and <code>77</code>, and the lead sums them (<code>156</code>) in 9 critical-path calls.</p>
+<p>In <code>org_small_lead</code> (lead only trained), the untrained <code>fjord</code> worker replies:</p>
+<pre class="shiki github-light" style="background-color:#fff;color:#24292e; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" class="astro-code github-light"><code><span class="line"><span>The count of employees hired after 2013 across all sites (atlas, boreal, delta, fjord) is **77**.</span></span>
+<span class="line"><span>Breakdown by hire year: 2018: 13, 2017: 7, 2020: 6, 2021: 4, 2022: 8, 2023: 9, 2024: 6.</span></span></code></pre>
+<p>Two things are wrong with that worker reply: <code>fjord</code> falsely claims its local count of <code>77</code> is <em>“across all sites (atlas, boreal, delta, fjord)”</em>, and its year breakdown only sums to <code>53</code> (it omitted 2014–2016). Because the lead cannot see the files, that one sloppy worker reply sends the trained lead into a 2,000-token crisis trying to figure out whether the sites actually share data:</p>
+<pre class="shiki github-light" style="background-color:#fff;color:#24292e; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" class="astro-code github-light"><code><span class="line"><span>The atlas site explicitly says the total across all sites is 28. The boreal site says 32,</span></span>
+<span class="line"><span>delta 19, fjord 77. For fjord, the breakdown sums to 53 but the total is 77, so there's a</span></span>
+<span class="line"><span>discrepancy... Since the atlas site's response was the first and consistent with its own</span></span>
+<span class="line"><span>breakdown, I will go with 28.</span></span></code></pre>
+<p>No amount of lead-only RL can fix a worker that lies about what is in its file.</p>
+<h3 id="4-what-the-reward-didnt-care-about-final_text-endings">4. What the reward didn’t care about: <code>final_text</code> endings</h3>
+<p>Look back at the left panel of the coordination figure (<em>“How org episodes end”</em>). At step 30 of <code>org_small</code>, only <strong>18%</strong> (<code>7/40</code>) of episodes end with the lead calling <code>submit(answer)</code>. Another <strong>80%</strong> (<code>32/40</code>) end with <code>status = "final_text"</code>, meaning the lead wrote a plain-text message with no tool call.</p>
+<p>Why? In <code>agents.py</code> (line 168), if the lead replies without a tool call, <code>org_harness</code> immediately ends the episode and passes <code>m.content</code> to the grader:</p>
+<pre class="shiki github-light" style="background-color:#fff;color:#24292e; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" class="astro-code github-light"><code><span class="line"><span style="color:#D73A49">if</span><span style="color:#D73A49"> not</span><span style="color:#24292E"> m.tool_calls:</span></span>
+<span class="line"><span style="color:#D73A49">    return</span><span style="color:#24292E"> done(m.content, </span><span style="color:#032F62">"final_text"</span><span style="color:#24292E">, t </span><span style="color:#D73A49">+</span><span style="color:#005CC5"> 1</span><span style="color:#24292E">)</span></span></code></pre>
+<p>Because <code>tasks.grade</code> extracts the last number from a plain-text response, stating <em>“Therefore, the total is <strong>156</strong>”</em> in plain text earns the <strong>exact same reward</strong> as calling <code>submit(answer="156")</code>—and saves one tool-call token sequence. Just like in <code>multi-harness-rl</code>, the model drifts toward whichever habit earns the same reward with less effort.</p>
+<p>Here, however, that shortcut occasionally bites the model. On two tasks (<code>o19900003</code> in <code>org_small</code> and <code>o20200002</code> in <code>org_small_lead</code>), the lead receives the worker replies and writes a plain-text “thinking out loud” message (<em>“Now I have the data from all sites, let me compile the monthly counts…”</em>), expecting to call <code>submit</code> on the next turn—and the harness cuts the episode off mid-thought. Giving the lead a one-turn nudge when it writes plain text before <code>LEAD_MAX_TURNS</code> (the way <code>pytools</code> does in <code>rl_harness</code>) is an easy fix for the next run.</p>
+<h3 id="5-training-health">5. Training health</h3>
+<p><img src="./multi-agent-rl/fig_training.png" alt="Training curves" loading="lazy"></p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th><code>org_small</code> (<code>--train-roles all</code>)</th>
+<th><code>org_small_lead</code> (<code>--train-roles lead</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Rollouts</strong></td>
+<td>30 steps × 24 = 720 org rollouts (~2,640 agent trajectories)</td>
+<td>30 steps × 24 = 720 org rollouts (~720 lead trajectories trained)</td>
+</tr>
+<tr>
+<td><strong>Trainable rows / tokens per step (median)</strong></td>
+<td>52 rows (1 lead + <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">K</span></span></span></span> workers per org) / 145k tokens</td>
+<td>15 rows (lead only) / 58k tokens</td>
+</tr>
+<tr>
+<td><strong>Median step time</strong></td>
+<td>251 s rollout + 182 s training</td>
+<td>315 s rollout + 57 s training</td>
+</tr>
+<tr>
+<td><strong>Peak trainer VRAM</strong></td>
+<td>10.6 GB (vLLM holds another 45% of the 24 GB card)</td>
+<td>10.6 GB</td>
+</tr>
+<tr>
+<td><strong>vLLM vs trainer KL per token</strong></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3.9</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">3.9\times10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">3.9</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span> mean, max <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>6.0</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">6.0\times10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">6.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4.1</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">4.1\times10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4.1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span> mean, max <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>8.0</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">8.0\times10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">8.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td><strong>Flat groups (0/6 or 6/6 correct)</strong></td>
+<td>38% (1.53 / 4 groups per step; drops to 0.75 / 4 in steps 26–29)</td>
+<td>48% (1.93 / 4 groups per step)</td>
+</tr>
+</tbody>
+</table>
+<p>The middle panel (<code>vLLM vs trainer KL per token</code>) verifies that the in-place merged-weight reload (<code>publish_merged</code>) works: the per-token KL between vLLM’s sampled logprobs and the trainer’s forward pass stays around <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mo>×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">4\times10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span> across all 30 steps.</p>
+<p>Notice two differences between the two training curves:</p>
+<ol>
+<li><strong>Flat groups drop in <code>org_small</code>, but climb in <code>org_small_lead</code> mid-run.</strong> In steps 11–25 of <code>org_small_lead</code>, more than half of all task groups (<code>2.0–2.6</code> out of <code>4</code>) had zero reward variance because all 6 organisations failed the task (<code>flat = 4/4</code> on steps 11, 16, and 22).</li>
+<li><strong>Role drift on shared weights.</strong> Because <code>lead</code> and <code>worker</code> share the same LoRA parameters, updating only on <code>lead</code> rows pushes the shared weights toward orchestrator patterns (<code>ask</code>/<code>submit</code>) without anchoring worker behavior. At step 29 of <code>org_small_lead</code>, 12 of the 24 rollouts threw errors and site coverage dipped to <code>0.50</code>. Training all roles together (<code>--train-roles all</code>) keeps the shared policy balanced across every role it has to play.</li>
+</ol>
+<h2 id="what-id-take-away">What I’d take away</h2>
+<ol>
+<li><strong>Collective rewards (RLCR) work on a 2.6B model without per-agent credit assignment.</strong> Giving every agent in an organisation the same scalar outcome reward took multi-agent accuracy from <strong>22.5% to 37.5%</strong>, cut critical-path latency by <strong>23%</strong>, and cut worker turn exhaustion by <strong>55%</strong> in 30 steps on one GPU.</li>
+<li><strong>On a small shared model, you cannot just train the lead and freeze the workers.</strong> In <code>org_small_lead</code> (<code>--train-roles lead</code>), worker turn exhaustion stayed stuck at <code>1.10</code> per task, sloppy worker replies derailed the lead on 4-site tasks (<code>0%</code> on <code>wide</code>), and multi-agent accuracy failed to improve (<code>30.0% → 27.5%</code>).</li>
+<li><strong>Shared weights really do act like a gene pool.</strong> Training <em>only</em> on multi-agent organisations boosted single-agent <code>solo</code> accuracy from <strong>45.0% to 62.5%</strong> zero-shot—and that transfer came specifically from training the workers (<code>62.5%</code> in <code>all</code> vs <code>50.0%</code> in <code>lead</code>), because workers and <code>solo</code> share the same data tools (<code>list_files</code>, <code>read_file</code>, <code>run_python</code>).</li>
+<li><strong>Critical-path latency is the right efficiency bonus for parallel agents.</strong> Counting parallel worker calls by the slowest branch (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mrow><mi>max</mi><mo>⁡</mo></mrow><mi>i</mi></msub><msub><mi>L</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\max_i L_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mop"><span class="mop">max</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>) rewards the lead for fanning out in parallel and rewards workers for finishing in fewer turns.</li>
+<li><strong>Watch how episodes end.</strong> Because <code>org_harness</code> accepts a plain-text lead reply as a final answer, 80% of episodes end without calling <code>submit()</code>, which occasionally cuts the lead off when it summarizes intermediate results out loud.</li>
+</ol>
+<h2 id="caveats">Caveats</h2>
+<ul>
+<li><strong>Small evaluation size (40 tasks per mode, 10 per bucket).</strong> Each bucket has 10 tasks, so a 10% swing in a single bucket is 1 task. That is why the main significance claim combines all 80 paired test evaluations (<code>org + solo</code>: <code>27/80 → 40/80</code>, 21 fixed vs 8 broken, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.024</mn></mrow><annotation encoding="application/x-tex">p = 0.024</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.024</span></span></span></span>). Running with <code>--n-test 30</code> (120 tasks per mode) would tighten the per-bucket error bars.</li>
+<li><strong>30 training steps (120 tasks, 720 organisation rollouts).</strong> This is a small budget (~3.5 hours per run). In <code>org_small</code>, batch accuracy was still rising in steps 26–29 (<code>35.4%</code>, with flat groups down to <code>0.75/4</code>).</li>
+<li><strong>One small bug at step 30 of <code>org_small</code>.</strong> Before I added <code>"n_sites": task.n_sites</code> to <code>run_rollout</code>’s exception fallback in <code>rollout.py</code>, a single errored rollout at step 30 caused the step-30 training metric log line to raise a <code>KeyError</code> <em>after</em> the step-30 weights had already been saved and pushed to vLLM. Step 30’s evaluation was then run against those step-30 weights. The fix is in <code>rollout.py</code> and <code>org_small_lead</code> ran all 30 steps cleanly.</li>
+</ul>
+<h2 id="reproducing">Reproducing</h2>
+<p>The code is in the <code>multi_agent_rl</code> repository: <code>org_tasks.py</code> (sharded CSV task generator), <code>agents.py</code> (<code>org_harness</code> and <code>solo_harness</code>), <code>rollout.py</code> (critical-path reward, row building, tandem-repeat masking, <code>collective_samples</code>), <code>proxy.py</code> (token-capturing proxy), <code>sandbox.py</code> (Docker), and <code>train.py</code> (GRPO + LoRA trainer). Both runs above can be reproduced with:</p>
+<pre class="shiki github-light" style="background-color:#fff;color:#24292e; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word;" tabindex="0" class="astro-code github-light"><code><span class="line"><span style="color:#6A737D"># 1. No-GPU checks: shard reassembly + end-to-end offline smoke test</span></span>
+<span class="line"><span style="color:#6F42C1">make</span><span style="color:#032F62"> test</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 2. Start vLLM policy server on :8000 (~45% of one RTX 3090 Ti)</span></span>
+<span class="line"><span style="color:#6F42C1">./serve_vllm.sh</span><span style="color:#D73A49"> ></span><span style="color:#032F62"> runs/vllm.log</span><span style="color:#D73A49"> 2>&#x26;1</span><span style="color:#24292E"> &#x26;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 3. Main run: train all roles (lead + workers) with collective rewards</span></span>
+<span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./rl_harness/.venv-lfm/bin/python</span><span style="color:#005CC5"> -u</span><span style="color:#032F62"> train.py</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">    --run</span><span style="color:#032F62"> org_small</span><span style="color:#005CC5"> --train-roles</span><span style="color:#032F62"> all</span><span style="color:#005CC5"> --steps</span><span style="color:#005CC5"> 30</span><span style="color:#005CC5"> --tasks-per-step</span><span style="color:#005CC5"> 4</span><span style="color:#005CC5"> --group</span><span style="color:#005CC5"> 6</span><span style="color:#005CC5"> --n-test</span><span style="color:#005CC5"> 10</span><span style="color:#005CC5"> --eval-every</span><span style="color:#005CC5"> 10</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 4. Restart vLLM on fresh base weights and run the lead-only ablation</span></span>
+<span class="line"><span style="color:#6F42C1">./scripts/stop_vllm.sh</span><span style="color:#24292E"> &#x26;&#x26; </span><span style="color:#6F42C1">./serve_vllm.sh</span><span style="color:#D73A49"> ></span><span style="color:#032F62"> runs/vllm.log</span><span style="color:#D73A49"> 2>&#x26;1</span><span style="color:#24292E"> &#x26;</span></span>
+<span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./rl_harness/.venv-lfm/bin/python</span><span style="color:#005CC5"> -u</span><span style="color:#032F62"> train.py</span><span style="color:#005CC5"> \</span></span>
+<span class="line"><span style="color:#005CC5">    --run</span><span style="color:#032F62"> org_small_lead</span><span style="color:#005CC5"> --train-roles</span><span style="color:#032F62"> lead</span><span style="color:#005CC5"> --steps</span><span style="color:#005CC5"> 30</span><span style="color:#005CC5"> --tasks-per-step</span><span style="color:#005CC5"> 4</span><span style="color:#005CC5"> --group</span><span style="color:#005CC5"> 6</span><span style="color:#005CC5"> --n-test</span><span style="color:#005CC5"> 10</span><span style="color:#005CC5"> --eval-every</span><span style="color:#005CC5"> 10</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># 5. Summary tables, paired McNemar test, and blog figures</span></span>
+<span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./rl_harness/.venv-lfm/bin/python</span><span style="color:#032F62"> analysis/summarize_run.py</span><span style="color:#032F62"> org_small</span><span style="color:#005CC5"> --compare</span><span style="color:#032F62"> org_small_lead</span></span>
+<span class="line"><span style="color:#005CC5">.</span><span style="color:#032F62">./rl_harness/.venv-lfm/bin/python</span><span style="color:#032F62"> analysis/make_blog_figures.py</span><span style="color:#005CC5"> --out</span><span style="color:#032F62"> blog/multi-agent-rl</span></span>
+<span class="line"><span style="color:#24292E">NODE_PATH</span><span style="color:#D73A49">=</span><span style="color:#032F62">/home/webpage/node_modules</span><span style="color:#6F42C1"> node</span><span style="color:#032F62"> blog/build.mjs</span></span></code></pre>
+      </article>
+      <hr />
+      <p><a href="https://www.sunnyguha.com/blog">← Back to blog</a></p>
+    </main>
+    <footer class="site-footer">
+      &copy; 2026 Sunny Guha
+    </footer>
+  </body>
+</html>

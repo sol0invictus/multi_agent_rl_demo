@@ -4,7 +4,7 @@ RUN   ?= org_all
 ARGS  ?=
 N     ?= 10
 
-.PHONY: test tasks smoke image serve stop-vllm probe show train ablation table clean
+.PHONY: test tasks smoke image serve stop-vllm probe show train ablation table figures clean
 
 test: tasks smoke                      ## no-GPU checks
 
@@ -37,6 +37,9 @@ ablation:                              ## same setup, only the lead's tokens are
 
 table:                                 ## markdown results for runs/$(RUN)
 	$(PY) analysis/summarize_run.py $(RUN) $(ARGS)
+
+figures:                               ## regenerate blog figures + results JSON
+	$(PY) analysis/make_blog_figures.py $(ARGS)
 
 clean:                                 ## leftover sandbox workspaces and caches (keeps runs)
 	rm -rf runs/workspaces __pycache__ */__pycache__

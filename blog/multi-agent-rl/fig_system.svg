@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="14">
+  <title>System overview: lead and worker agents inside org_harness talk to a capture proxy under their own agent URLs; the proxy forwards exact token ids to vLLM; the trainer builds one row per agent, updates LoRA r=32, and reloads merged weights into vLLM.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect width="900" height="400" fill="#fdfdfd"/>
+
+  <!-- harnesses -->
+  <text x="20" y="30" font-weight="bold" fill="#1a1a1a">Black-box agent loops</text>
+  <text x="20" y="48" font-size="12" fill="#666">each agent gets its own OpenAI URL</text>
+  <g>
+    <rect x="20" y="64" width="242" height="66" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="2"/>
+    <text x="34" y="88" font-weight="bold" fill="#1a1a1a">lead  (/r/rid-lead/v1)</text>
+    <text x="34" y="108" font-size="12" fill="#52514e">tools: ask(site, req), submit(ans)</text>
+
+    <rect x="20" y="142" width="242" height="66" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="1.8"/>
+    <text x="34" y="166" font-weight="bold" fill="#1a1a1a">workers 1…K  (/r/rid-site/v1)</text>
+    <text x="34" y="186" font-size="12" fill="#52514e">list_files, read_file, run_python, reply</text>
+
+    <rect x="20" y="220" width="242" height="58" rx="6" fill="#fdfdfd" stroke="#1baf7a" stroke-width="1.8"/>
+    <text x="34" y="244" font-weight="bold" fill="#1a1a1a">solo  (/r/rid-solo/v1)</text>
+    <text x="34" y="263" font-size="12" fill="#52514e">eval baseline · all sites in 1 dir</text>
+  </g>
+
+  <!-- sandbox -->
+  <rect x="20" y="306" width="242" height="60" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="34" y="330" font-weight="bold" fill="#1a1a1a">Docker sandbox</text>
+  <text x="34" y="349" font-size="12" fill="#52514e">no network · 1 isolated dir per site</text>
+  <line x1="141" y1="280" x2="141" y2="302" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)" marker-start="url(#a)"/>
+
+  <!-- proxy -->
+  <rect x="322" y="106" width="252" height="130" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="338" y="132" font-weight="bold" fill="#1a1a1a">Capture proxy (:8100)</text>
+  <text x="338" y="154" font-size="12" fill="#52514e">OpenAI chat API in front</text>
+  <text x="338" y="172" font-size="12" fill="#52514e">renders chat template → token ids</text>
+  <text x="338" y="190" font-size="12" fill="#52514e">extends append-only turns 1-for-1</text>
+  <text x="338" y="208" font-size="12" fill="#52514e">records ids + vLLM logprobs per agent</text>
+  <line x1="264" y1="171" x2="318" y2="171" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="267" y="162" font-size="11" fill="#666">chat JSON</text>
+
+  <!-- vLLM -->
+  <rect x="630" y="106" width="250" height="130" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="646" y="132" font-weight="bold" fill="#1a1a1a">vLLM server (:8000)</text>
+  <text x="646" y="154" font-size="12" fill="#52514e">LFM2.5-2.6B · /v1/completions</text>
+  <text x="646" y="172" font-size="12" fill="#52514e">token ids in → token ids + logprobs</text>
+  <text x="646" y="190" font-size="12" fill="#52514e">45% of one RTX 3090 Ti (24 GB)</text>
+  <text x="646" y="208" font-size="12" fill="#52514e">serves lead + all workers at once</text>
+  <line x1="576" y1="171" x2="626" y2="171" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="578" y="162" font-size="11" fill="#666">token ids</text>
+
+  <!-- trainer -->
+  <rect x="466" y="290" width="414" height="84" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="2"/>
+  <text x="482" y="315" font-weight="bold" fill="#1a1a1a">GRPO + LoRA Trainer (shares GPU with vLLM)</text>
+  <text x="482" y="335" font-size="12" fill="#52514e">collective advantage A_g shared across agents in each org</text>
+  <text x="482" y="353" font-size="12" fill="#52514e">LoRA r=32 (40.3M params, 1.47%) · SDPA · no sequence packing</text>
+  <path d="M442,238 L442,332 L462,332" fill="none" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="330" y="264" font-size="11" fill="#666">1 row per agent +</text>
+  <text x="330" y="279" font-size="11" fill="#666">collective reward</text>
+  <path d="M760,288 L760,240" fill="none" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="770" y="260" font-size="11" fill="#666">merge LoRA → reload</text>
+  <text x="770" y="275" font-size="11" fill="#666">+ reset prefix cache</text>
+</svg>

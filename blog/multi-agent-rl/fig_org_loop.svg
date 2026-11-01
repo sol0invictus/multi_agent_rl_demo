@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="13">
+  <title>What an agent organisation does: a lead agent with no file access decomposes the question and calls ask(site, request) in parallel; per-site worker agents inspect their own shard in a Docker sandbox and reply; all agents are the same shared policy.</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect width="900" height="440" fill="#fdfdfd"/>
+
+  <!-- Shared policy banner -->
+  <rect x="20" y="16" width="860" height="44" rx="6" fill="#eaf2fc" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="36" y="36" font-weight="bold" fill="#1a1a1a">One shared policy (LiquidAI LFM2.5-2.6B + LoRA r=32)</text>
+  <text x="36" y="52" font-size="11.5" fill="#52514e">Every agent in the organisation is the exact same model. Roles differ only by system prompt, tool list, and conversation history.</text>
+
+  <!-- Lead agent -->
+  <rect x="20" y="84" width="250" height="240" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="2"/>
+  <text x="36" y="112" font-weight="bold" font-size="14" fill="#1a1a1a">Lead agent (1 per task)</text>
+  <text x="36" y="132" font-size="11.5" fill="#52514e">Sees the question + site names</text>
+  <text x="36" y="150" font-size="11.5" font-weight="bold" fill="#d64545">Cannot read files or run code</text>
+
+  <rect x="34" y="166" width="222" height="66" rx="5" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="46" y="186" font-size="12" font-weight="bold" fill="#1a1a1a">1  Decompose &amp; fan out</text>
+  <text x="46" y="204" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#1a1a1a">ask(site, request)</text>
+  <text x="46" y="220" font-size="11" fill="#52514e">several asks in one turn run in parallel</text>
+
+  <rect x="34" y="242" width="222" height="66" rx="5" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="46" y="262" font-size="12" font-weight="bold" fill="#1a1a1a">2  Combine &amp; finish</text>
+  <text x="46" y="280" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#1a1a1a">submit(answer)</text>
+  <text x="46" y="296" font-size="11" fill="#52514e">at most 6 lead turns</text>
+
+  <!-- Workers -->
+  <g transform="translate(345,84)">
+    <rect x="0" y="0" width="255" height="72" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="1.8"/>
+    <text x="14" y="22" font-weight="bold" fill="#1a1a1a">Worker: atlas</text>
+    <text x="14" y="40" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#52514e">list_files · read_file · run_python</text>
+    <text x="14" y="58" font-size="11" fill="#52514e">ends request with <tspan font-family="DejaVu Sans Mono, Menlo, monospace" fill="#1a1a1a">reply(message)</tspan></text>
+
+    <rect x="0" y="84" width="255" height="72" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="1.8"/>
+    <text x="14" y="106" font-weight="bold" fill="#1a1a1a">Worker: boreal</text>
+    <text x="14" y="124" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#52514e">list_files · read_file · run_python</text>
+    <text x="14" y="142" font-size="11" fill="#52514e">keeps its history across follow-ups</text>
+
+    <rect x="0" y="168" width="255" height="72" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="1.8"/>
+    <text x="14" y="190" font-weight="bold" fill="#1a1a1a">Worker: cobalt</text>
+    <text x="14" y="208" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#52514e">list_files · read_file · run_python</text>
+    <text x="14" y="226" font-size="11" fill="#52514e">at most 6 model calls per request</text>
+  </g>
+
+  <!-- Arrows Lead <-> Workers -->
+  <line x1="274" y1="112" x2="340" y2="112" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="340" y1="128" x2="274" y2="128" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="283" y="106" font-size="10.5" fill="#666">ask / reply</text>
+
+  <line x1="274" y1="196" x2="340" y2="196" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="340" y1="212" x2="274" y2="212" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <line x1="274" y1="280" x2="340" y2="280" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="340" y1="296" x2="274" y2="296" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- Partitioned Sandboxes -->
+  <g transform="translate(655,84)">
+    <rect x="0" y="0" width="225" height="72" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+    <text x="14" y="22" font-weight="bold" fill="#1a1a1a">Site: atlas/</text>
+    <text x="14" y="41" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#1a1a1a">employees.csv (shard 1)</text>
+    <text x="14" y="58" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#52514e">departments.csv (full copy)</text>
+
+    <rect x="0" y="84" width="225" height="72" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+    <text x="14" y="106" font-weight="bold" fill="#1a1a1a">Site: boreal/</text>
+    <text x="14" y="125" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#1a1a1a">employees.csv (shard 2)</text>
+    <text x="14" y="142" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#52514e">departments.csv (full copy)</text>
+
+    <rect x="0" y="168" width="225" height="72" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+    <text x="14" y="190" font-weight="bold" fill="#1a1a1a">Site: cobalt/</text>
+    <text x="14" y="209" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#1a1a1a">employees.csv (shard 3)</text>
+    <text x="14" y="226" font-size="11" font-family="DejaVu Sans Mono, Menlo, monospace" fill="#52514e">departments.csv (full copy)</text>
+  </g>
+
+  <line x1="604" y1="120" x2="650" y2="120" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)" marker-start="url(#a)"/>
+  <line x1="604" y1="204" x2="650" y2="204" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)" marker-start="url(#a)"/>
+  <line x1="604" y1="288" x2="650" y2="288" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)" marker-start="url(#a)"/>
+
+  <!-- Grader & Solo baseline note -->
+  <rect x="20" y="348" width="580" height="72" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="36" y="372" font-weight="bold" fill="#1a1a1a">Grader &amp; collective reward</text>
+  <text x="36" y="392" font-size="11.5" fill="#52514e">Scores the lead's submitted answer against the full unsharded table. Critical-path latency counts</text>
+  <text x="36" y="408" font-size="11.5" fill="#52514e">parallel asks by the slowest worker in that turn, so asking all sites at once beats asking one by one.</text>
+  <line x1="145" y1="326" x2="145" y2="344" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <rect x="620" y="348" width="260" height="72" rx="6" fill="#e6f6f0" stroke="#1baf7a" stroke-width="1.5"/>
+  <text x="634" y="372" font-weight="bold" fill="#1a1a1a">Solo baseline (single agent)</text>
+  <text x="634" y="392" font-size="11.5" fill="#52514e">One agent sees all site folders</text>
+  <text x="634" y="408" font-size="11.5" fill="#52514e">(<tspan font-family="DejaVu Sans Mono, Menlo, monospace">atlas/, boreal/, cobalt/</tspan>) at once.</text>
+</svg>
