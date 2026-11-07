@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 490" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="12.5">
+  <title>Side-by-side comparison of the two training regimes evaluated in this post: Case 1 (--train-roles all, Avalon-M1 RLCR) trains the lead and all K workers on the collective advantage A_g; Case 2 (--train-roles lead, Kimi PARL style) trains only the lead and drops all worker rows.</title>
+  <defs>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2a78d6"/>
+    </marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#eb6834"/>
+    </marker>
+  </defs>
+  <style>
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 11px; fill: #1a1a1a; }
+    .s { font-size: 11px; fill: #52514e; }
+    .b { font-weight: bold; fill: #1a1a1a; }
+  </style>
+  <rect width="900" height="490" fill="#fdfdfd"/>
+
+  <text x="20" y="28" font-weight="bold" font-size="14" fill="#1a1a1a">The two training regimes compared in this post: same rollouts, same reward, different gradient masks</text>
+  <text x="20" y="47" class="s">In both runs, every agent in the organisation is the exact same model (LFM2.5-2.6B + LoRA r=32). Only who gets the gradient step changes.</text>
+
+  <!-- ==================== CASE 1: TRAIN ALL ROLES ==================== -->
+  <rect x="20" y="64" width="420" height="408" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="2"/>
+  <rect x="20" y="64" width="420" height="38" rx="6" fill="#eaf2fc" stroke="#2a78d6" stroke-width="2"/>
+  <text x="34" y="88" font-weight="bold" font-size="13.5" fill="#1a1a1a">Case 1 · Train all roles (--train-roles all · org_small)</text>
+
+  <!-- Trajectories box -->
+  <text x="34" y="122" class="b">1. Rollout trajectories in organisation g (collective A_g):</text>
+
+  <rect x="34" y="132" width="392" height="32" rx="4" fill="#2a78d6"/>
+  <text x="44" y="152" font-size="11.5" font-weight="bold" fill="#ffffff">Lead row: ask(atlas), ask(boreal), …, submit(ans)</text>
+  <text x="355" y="152" class="m" font-weight="bold" fill="#ffffff">← +A_g</text>
+
+  <rect x="34" y="170" width="392" height="28" rx="4" fill="#2a78d6"/>
+  <text x="44" y="188" font-size="11" fill="#ffffff">Worker 1 (atlas): list_files → run_python → reply()</text>
+  <text x="355" y="188" class="m" font-weight="bold" fill="#ffffff">← +A_g</text>
+
+  <rect x="34" y="204" width="392" height="28" rx="4" fill="#2a78d6"/>
+  <text x="44" y="222" font-size="11" fill="#ffffff">Worker 2 (boreal): read_file → run_python → reply()</text>
+  <text x="355" y="222" class="m" font-weight="bold" fill="#ffffff">← +A_g</text>
+
+  <rect x="34" y="238" width="392" height="28" rx="4" fill="#2a78d6"/>
+  <text x="44" y="256" font-size="11" fill="#ffffff">Worker K (cobalt): list_files → run_python → reply()</text>
+  <text x="355" y="256" class="m" font-weight="bold" fill="#ffffff">← +A_g</text>
+
+  <!-- Arrow down to shared LoRA -->
+  <line x1="230" y1="270" x2="230" y2="294" stroke="#2a78d6" stroke-width="2" marker-end="url(#ab)"/>
+  <text x="240" y="287" class="m" fill="#2a78d6">~52 rows / ~145k tokens per step (182s)</text>
+
+  <!-- Shared LoRA box -->
+  <rect x="34" y="298" width="392" height="72" rx="5" fill="#eaf2fc" stroke="#2a78d6" stroke-width="1.5"/>
+  <text x="46" y="318" class="b">2. Effect on shared LoRA weights (W₀ + BA):</text>
+  <text x="46" y="336" class="s">· Updates <tspan class="b">orchestration</tspan> (<tspan class="m">ask/submit</tspan>) AND <tspan class="b">coding</tspan> (<tspan class="m">run_python</tspan>).</text>
+  <text x="46" y="354" class="s">· Balanced gene pool: workers cut turn exhaustion by <tspan class="b">55%</tspan>.</text>
+
+  <!-- Outcomes box -->
+  <rect x="34" y="380" width="392" height="78" rx="5" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="46" y="400" class="b">3. Held-out results at step 30:</text>
+  <text x="46" y="418" class="m" fill="#2a78d6" font-weight="bold">· Multi-agent (org):  22.5% → 37.5% (+15.0 pts)</text>
+  <text x="46" y="435" class="m" fill="#1baf7a" font-weight="bold">· Zero-shot (solo):   45.0% → 62.5% (+17.5 pts)</text>
+  <text x="46" y="451" class="s">· 4-site wide (K=4): <tspan class="b">10% → 20%</tspan>  |  Combined p = <tspan class="b">0.024</tspan></text>
+
+  <!-- ==================== CASE 2: TRAIN LEAD ONLY ==================== -->
+  <rect x="460" y="64" width="420" height="408" rx="6" fill="#fdfdfd" stroke="#eb6834" stroke-width="2"/>
+  <rect x="460" y="64" width="420" height="38" rx="6" fill="#fdefe8" stroke="#eb6834" stroke-width="2"/>
+  <text x="474" y="88" font-weight="bold" font-size="13.5" fill="#1a1a1a">Case 2 · Train lead only (--train-roles lead · org_small_lead)</text>
+
+  <!-- Trajectories box -->
+  <text x="474" y="122" class="b">1. Rollout trajectories in organisation g (collective A_g):</text>
+
+  <rect x="474" y="132" width="392" height="32" rx="4" fill="#eb6834"/>
+  <text x="484" y="152" font-size="11.5" font-weight="bold" fill="#ffffff">Lead row: ask(atlas), ask(boreal), …, submit(ans)</text>
+  <text x="795" y="152" class="m" font-weight="bold" fill="#ffffff">← +A_g</text>
+
+  <rect x="474" y="170" width="392" height="28" rx="4" fill="#e6e5e1" stroke="#b9b8b2" stroke-dasharray="4,3"/>
+  <text x="484" y="188" font-size="11" fill="#8a8984">Worker 1 (atlas): list_files → run_python → reply()</text>
+  <text x="772" y="188" class="m" fill="#8a8984">dropped (0)</text>
+
+  <rect x="474" y="204" width="392" height="28" rx="4" fill="#e6e5e1" stroke="#b9b8b2" stroke-dasharray="4,3"/>
+  <text x="484" y="222" font-size="11" fill="#8a8984">Worker 2 (boreal): read_file → run_python → reply()</text>
+  <text x="772" y="222" class="m" fill="#8a8984">dropped (0)</text>
+
+  <rect x="474" y="238" width="392" height="28" rx="4" fill="#e6e5e1" stroke="#b9b8b2" stroke-dasharray="4,3"/>
+  <text x="484" y="256" font-size="11" fill="#8a8984">Worker K (cobalt): list_files → run_python → reply()</text>
+  <text x="772" y="256" class="m" fill="#8a8984">dropped (0)</text>
+
+  <!-- Arrow down to shared LoRA -->
+  <line x1="670" y1="270" x2="670" y2="294" stroke="#eb6834" stroke-width="2" marker-end="url(#ao)"/>
+  <text x="680" y="287" class="m" fill="#eb6834">~15 rows / ~58k tokens per step (57s)</text>
+
+  <!-- Shared LoRA box -->
+  <rect x="474" y="298" width="392" height="72" rx="5" fill="#fdefe8" stroke="#eb6834" stroke-width="1.5"/>
+  <text x="486" y="318" class="b">2. Effect on shared LoRA weights (W₀ + BA):</text>
+  <text x="486" y="336" class="s">· <tspan class="b">Zero gradients</tspan> ever touch <tspan class="m">run_python</tspan>, <tspan class="m">read_file</tspan>, or <tspan class="m">reply</tspan>.</text>
+  <text x="486" y="354" class="s">· Role drift: shared weights skew toward lead; workers stay buggy.</text>
+
+  <!-- Outcomes box -->
+  <rect x="474" y="380" width="392" height="78" rx="5" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="486" y="400" class="b">3. Held-out results at step 30:</text>
+  <text x="486" y="418" class="m" fill="#eb6834" font-weight="bold">· Multi-agent (org):  30.0% → 27.5% (−2.5 pts)</text>
+  <text x="486" y="435" class="m" fill="#52514e" font-weight="bold">· Zero-shot (solo):   42.5% → 50.0% (+7.5 pts)</text>
+  <text x="486" y="451" class="s">· 4-site wide (K=4): <tspan class="b" fill="#d64545">20% → 0%</tspan>   |  Combined p = <tspan class="b">0.856</tspan></text>
+</svg>

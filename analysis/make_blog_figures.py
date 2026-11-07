@@ -79,6 +79,85 @@ def sign_test(w, l):
     return min(1.0, 2 * sum(math.comb(n, i) for i in range(min(w, l) + 1)) / 2 ** n) if n else 1.0
 
 
+# ------------------------------------------------------------- fig 0: hero summary & punchline (top of post)
+fig, axes = plt.subplots(1, 3, figsize=(13.4, 3.35), gridspec_kw={"width_ratios": [1.15, 1.0, 1.25]})
+
+# Panel A: Multi-agent org progress over training
+ax = axes[0]
+ys_all_org = [eval_all[s]["org"]["acc"] for s in STEPS_ALL]
+ys_lead_org = [eval_lead[s]["org"]["acc"] for s in STEPS_LEAD]
+ax.plot(STEPS_ALL, ys_all_org, color=COLOR["all"], lw=2.5, marker="o", ms=6.5, mec="#fdfdfd", mew=1.5,
+        label="Train all roles (lead + workers)")
+ax.plot(STEPS_LEAD, ys_lead_org, color=COLOR["lead"], lw=2.0, ls="--", marker="o", ms=6, mec="#fdfdfd", mew=1.5,
+        label="Train lead only (freeze workers)")
+ax.annotate(f"37.5%\n(+15 pts)", (SF, ys_all_org[-1]), xytext=(31.3, ys_all_org[-1] + 0.01),
+            va="center", fontsize=9.0, fontweight="bold", color=COLOR["all"])
+ax.annotate(f"27.5%\n(stalled)", (SF, ys_lead_org[-1]), xytext=(31.3, ys_lead_org[-1] - 0.015),
+            va="center", fontsize=8.8, fontweight="bold", color=COLOR["lead"])
+ax.set_title("1. Multi-agent accuracy over training")
+ax.set_xticks([0, 10, 20, 30])
+ax.set_xlabel("RL training step (1 GPU, ~3.5 hrs)")
+ax.set_xlim(-2, 39)
+pct_axis(ax, 0.08, 0.50)
+ax.set_ylabel("held-out accuracy")
+ax.legend(loc="upper left", fontsize=8.3)
+
+# Panel B: Headline accuracy at Step 30 (Base vs Lead-only vs All roles)
+ax = axes[1]
+groups_h = ["Multi-agent\n(org)", "Single-agent\n(solo, 0-shot)", "4-site OOD\n(K=4 wide)"]
+v0_h = [eval_all[S0]["org"]["acc"], eval_all[S0]["solo"]["acc"], eval_all[S0]["org"]["acc_wide"]]
+vl_h = [eval_lead[SF]["org"]["acc"], eval_lead[SF]["solo"]["acc"], eval_lead[SF]["org"]["acc_wide"]]
+va_h = [eval_all[SF]["org"]["acc"], eval_all[SF]["solo"]["acc"], eval_all[SF]["org"]["acc_wide"]]
+xh = np.arange(len(groups_h))
+wh = 0.25
+ax.bar(xh - wh, v0_h, width=wh, color=BASE, label="Base model (step 0)")
+ax.bar(xh, vl_h, width=wh, color=COLOR["lead"], label="Lead only (step 30)")
+ax.bar(xh + wh, va_h, width=wh, color=COLOR["all"], label="All roles (step 30)")
+for i in range(len(groups_h)):
+    ax.text(xh[i] + wh, va_h[i] + 0.018, f"{va_h[i]:.0%}", ha="center", va="bottom",
+            fontsize=8.6, fontweight="bold", color=COLOR["all"])
+    ax.text(xh[i], vl_h[i] + 0.018, f"{vl_h[i]:.0%}", ha="center", va="bottom",
+            fontsize=8.2, fontweight="bold", color=COLOR["lead"])
+ax.set_title("2. Accuracy at step 30")
+ax.set_xticks(xh)
+ax.set_xticklabels(groups_h, fontsize=8.8)
+pct_axis(ax, 0.0, 0.86)
+ax.legend(loc="upper left", fontsize=8.0)
+
+# Panel C: Coordination speed & worker reliability punchline
+ax = axes[2]
+cats_c = ["Critical-path\nlatency\n(calls / task)",
+          "Exhausted\nworkers\n(per task)"]
+base_c = [eval_all[S0]["org"]["latency"], eval_all[S0]["org"]["worker_exhausted"]]
+lead_c = [eval_lead[SF]["org"]["latency"], eval_lead[SF]["org"]["worker_exhausted"]]
+all_c = [eval_all[SF]["org"]["latency"], eval_all[SF]["org"]["worker_exhausted"]]
+# Normalize to Base = 100% so both fit on one clean horizontal comparison with exact raw numbers annotated
+y_c = np.array([1, 0])
+hc = 0.24
+ax.barh(y_c + hc, [1.0, 1.0], height=hc, color=BASE, label="Base (step 0)")
+ax.barh(y_c, [lead_c[0] / base_c[0], lead_c[1] / base_c[1]], height=hc, color=COLOR["lead"], label="Lead only (step 30)")
+ax.barh(y_c - hc, [all_c[0] / base_c[0], all_c[1] / base_c[1]], height=hc, color=COLOR["all"], label="All roles (step 30)")
+
+ax.text(1.02, 1 + hc, f"{base_c[0]:.1f} calls", va="center", fontsize=8.3, color=INK2)
+ax.text(lead_c[0] / base_c[0] + 0.02, 1, f"{lead_c[0]:.1f} calls (-8%)", va="center", fontsize=8.3, color=COLOR["lead"], fontweight="bold")
+ax.text(all_c[0] / base_c[0] + 0.02, 1 - hc, f"{all_c[0]:.1f} calls (-23%)", va="center", fontsize=8.5, color=COLOR["all"], fontweight="bold")
+
+ax.text(1.02, 0 + hc, f"{base_c[1]:.2f} / task", va="center", fontsize=8.3, color=INK2)
+ax.text(lead_c[1] / base_c[1] + 0.02, 0, f"{lead_c[1]:.2f} / task (-7%)", va="center", fontsize=8.3, color=COLOR["lead"], fontweight="bold")
+ax.text(all_c[1] / base_c[1] + 0.02, 0 - hc, f"{all_c[1]:.2f} / task (-55%)", va="center", fontsize=8.5, color=COLOR["all"], fontweight="bold")
+
+ax.set_yticks(y_c)
+ax.set_yticklabels(cats_c, fontsize=8.7)
+ax.set_xlim(0, 1.48)
+ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:.0%}"))
+ax.set_xlabel("relative to base model (100%)")
+ax.set_title("3. Team speed & worker failures")
+ax.grid(axis="y", visible=False)
+
+fig.subplots_adjust(wspace=0.36)
+save(fig, "fig_hero_punchline.png")
+
+
 # ------------------------------------------------------------- fig 1: held-out accuracy over training
 fig, axes = plt.subplots(1, 3, figsize=(13.2, 3.5), gridspec_kw={"width_ratios": [1.1, 1.1, 1.35]})
 
@@ -347,6 +426,112 @@ results["paired"] = {
     "lead_0_to_30": paired_stats(er_lead[S0], er_lead[SF]),
     "lead_30_to_all_30": paired_stats(er_lead[SF], er_all[SF]),
 }
+
+# ------------------------------------------------------------- fig 5: 2 training regimes head-to-head
+fig, axes = plt.subplots(1, 3, figsize=(13.8, 3.4), gridspec_kw={"width_ratios": [1.0, 1.3, 1.15]})
+
+# Panel 1: Mean trained tokens per step by role (lead vs worker)
+ax = axes[0]
+lead_tok_all = np.mean([m.get("loss_tokens_lead", 0) for m in met_all if m.get("rows", 0) > 0]) / 1e3
+work_tok_all = np.mean([m.get("loss_tokens_worker", 0) for m in met_all if m.get("rows", 0) > 0]) / 1e3
+lead_tok_ld = np.mean([m.get("loss_tokens_lead", 0) for m in met_lead if m.get("rows", 0) > 0]) / 1e3
+work_tok_ld = np.mean([m.get("loss_tokens_worker", 0) for m in met_lead if m.get("rows", 0) > 0]) / 1e3
+
+x_reg = np.arange(2)
+ax.bar(x_reg, [lead_tok_all, lead_tok_ld], width=0.44, color=["#1b5299", "#b84a1d"],
+       label="lead tokens (ask/submit)")
+ax.bar(x_reg, [work_tok_all, work_tok_ld], bottom=[lead_tok_all, lead_tok_ld], width=0.44,
+       color=[COLOR["all"], COLOR["lead"]], label="worker tokens (run_python)")
+ax.text(0, (lead_tok_all + work_tok_all) + 5, f"{lead_tok_all + work_tok_all:.0f}k tok/step\n(lead + K workers)",
+        ha="center", va="bottom", fontsize=8.4, fontweight="bold", color=COLOR["all"])
+ax.text(1, lead_tok_ld + 5, f"{lead_tok_ld:.0f}k tok/step\n(0 worker tokens!)",
+        ha="center", va="bottom", fontsize=8.4, fontweight="bold", color=COLOR["lead"])
+ax.set_xticks(x_reg)
+ax.set_xticklabels(["Case 1: all roles\n(org_small)", "Case 2: lead only\n(org_small_lead)"], fontsize=8.8)
+ax.set_ylabel("trained tokens / step (k)")
+ax.set_ylim(0, 205)
+ax.set_xlim(-0.55, 1.55)
+ax.set_title("Gradient budget by role")
+ax.legend(loc="upper right", fontsize=8.0)
+
+# Panel 2: Relative change from Step 0 -> Step 30 across key metrics
+ax = axes[1]
+metric_labels = [
+    "org accuracy\n(held-out, n=40)",
+    "solo transfer\n(zero-shot, n=40)",
+    "4-site wide\n(K=4 OOD, n=10)",
+    "worker speed\n(-exhausted %)",
+    "org speed\n(-latency %)",
+]
+d_all = [
+    100 * (eval_all[SF]["org"]["acc"] - eval_all[S0]["org"]["acc"]),
+    100 * (eval_all[SF]["solo"]["acc"] - eval_all[S0]["solo"]["acc"]),
+    100 * (eval_all[SF]["org"]["acc_wide"] - eval_all[S0]["org"]["acc_wide"]),
+    100 * (eval_all[S0]["org"]["worker_exhausted"] - eval_all[SF]["org"]["worker_exhausted"])
+    / eval_all[S0]["org"]["worker_exhausted"],
+    100 * (eval_all[S0]["org"]["latency"] - eval_all[SF]["org"]["latency"])
+    / eval_all[S0]["org"]["latency"],
+]
+d_lead = [
+    100 * (eval_lead[SF]["org"]["acc"] - eval_lead[S0]["org"]["acc"]),
+    100 * (eval_lead[SF]["solo"]["acc"] - eval_lead[S0]["solo"]["acc"]),
+    100 * (eval_lead[SF]["org"]["acc_wide"] - eval_lead[S0]["org"]["acc_wide"]),
+    100 * (eval_lead[S0]["org"]["worker_exhausted"] - eval_lead[SF]["org"]["worker_exhausted"])
+    / eval_lead[S0]["org"]["worker_exhausted"],
+    100 * (eval_lead[S0]["org"]["latency"] - eval_lead[SF]["org"]["latency"])
+    / eval_lead[S0]["org"]["latency"],
+]
+y_m = np.arange(len(metric_labels))[::-1]
+h = 0.34
+ax.axvline(0, color=INK2, lw=1.0)
+ax.barh(y_m + h / 2, d_all, height=h, color=COLOR["all"], label="Case 1: all roles")
+ax.barh(y_m - h / 2, d_lead, height=h, color=COLOR["lead"], label="Case 2: lead only")
+for y, va, vl in zip(y_m, d_all, d_lead):
+    ax.text(va + (1.5 if va >= 0 else -1.5), y + h / 2, f"{va:+.0f}%",
+            va="center", ha="left" if va >= 0 else "right", fontsize=8.3, fontweight="bold", color=COLOR["all"])
+    ax.text(vl + (1.5 if vl >= 0 else -1.5), y - h / 2, f"{vl:+.0f}%",
+            va="center", ha="left" if vl >= 0 else "right", fontsize=8.3, fontweight="bold", color=COLOR["lead"])
+ax.set_yticks(y_m)
+ax.set_yticklabels(metric_labels, fontsize=8.6)
+ax.set_xlim(-34, 84)
+ax.set_xlabel("improvement from step 0 to step 30 (%)")
+ax.set_title("Step 0 -> 30 gains by regime")
+ax.grid(axis="y", visible=False)
+ax.legend(loc="upper right", fontsize=8.0)
+
+# Panel 3: Paired task-level wins (fixed) vs losses (broken) from step 0 -> 30
+ax = axes[2]
+p_all = results["paired"]["all_0_to_30"]
+p_ld = results["paired"]["lead_0_to_30"]
+modes = ["org", "solo", "all"]
+mode_labels = ["org\n(n=40)", "solo\n(n=40)", "combined\n(n=80)"]
+xm = np.arange(len(modes))
+w = 0.32
+ax.axhline(0, color=INK2, lw=1.0)
+for idx, (m_key, col, p_dict, lab) in enumerate([
+    ("all", COLOR["all"], p_all, "Case 1: all roles"),
+    ("lead", COLOR["lead"], p_ld, "Case 2: lead only"),
+]):
+    pos = xm - w / 2 if idx == 0 else xm + w / 2
+    fixed = [p_dict[k]["fixed"] for k in modes]
+    broke = [-p_dict[k]["broke"] for k in modes]
+    ax.bar(pos, fixed, width=w, color=col, label=f"{lab} (fixed)")
+    ax.bar(pos, broke, width=w, color=col, alpha=0.38, hatch="//", edgecolor=col)
+    for px, fx, bx in zip(pos, fixed, broke):
+        ax.text(px, fx + 0.6, f"+{fx}", ha="center", va="bottom", fontsize=8.2, fontweight="bold", color=col)
+        ax.text(px, bx - 0.9, f"{bx}", ha="center", va="top", fontsize=8.0, color=INK2)
+ax.text(2 - w / 2 - 0.05, 25.6, "p=0.024*", ha="center", fontsize=8.2, fontweight="bold", color=COLOR["all"])
+ax.text(2 + w / 2 + 0.08, 20.6, "p=0.856", ha="center", fontsize=8.2, color=COLOR["lead"])
+ax.set_xticks(xm)
+ax.set_xticklabels(mode_labels, fontsize=8.8)
+ax.set_ylim(-19, 31)
+ax.set_ylabel("tasks fixed (+) vs broken (-)")
+ax.set_title("Paired task changes (McNemar)")
+ax.legend(loc="upper left", fontsize=8.0)
+
+fig.subplots_adjust(wspace=0.44)
+save(fig, "fig_regimes_comparison.png")
+
 out_json = os.path.join(ROOT, "analysis", f"results_{args.run_all}.json")
 with open(out_json, "w") as f:
     json.dump(results, f, indent=1, default=str)

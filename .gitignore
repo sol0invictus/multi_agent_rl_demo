@@ -1,5 +1,9 @@
 # experiment outputs: logs, adapters, merged weights (~5 GB per run), sandbox workspaces
-runs/
+runs/**
+# keep small per-run results (needed by analysis/make_blog_figures.py); weights/adapters/optimizer stay out
+!runs/*/
+!runs/*/*.jsonl
+!runs/*/config.json
 __pycache__/
 *.pyc
 .venv*/

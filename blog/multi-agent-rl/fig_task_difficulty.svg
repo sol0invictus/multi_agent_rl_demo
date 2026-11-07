@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 455" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="12.5">
+  <title>Three layers of task difficulty in org_tasks.py: relational query depth (easy/medium/hard with randomized column names), deliberate CSV corruption (dup, money, case, dates), and uneven K-site row sharding where worker errors compound across sites.</title>
+  <style>
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 11px; fill: #1a1a1a; }
+    .s { font-size: 11px; fill: #52514e; }
+    .b { font-weight: bold; fill: #1a1a1a; }
+  </style>
+  <rect width="900" height="455" fill="#fdfdfd"/>
+
+  <text x="20" y="28" font-weight="bold" font-size="14" fill="#1a1a1a">What makes a task hard for a 2.6B agent organisation? Three compounded layers</text>
+  <text x="20" y="47" class="s">Every task generates fresh synthetic CSVs with randomised column names, so agents must inspect schemas before writing pandas code.</text>
+
+  <!-- Layer 1: Query & Relational Complexity -->
+  <rect x="20" y="64" width="276" height="276" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="1.8"/>
+  <rect x="20" y="64" width="276" height="32" rx="6" fill="#eaf2fc" stroke="#2a78d6" stroke-width="1.8"/>
+  <text x="32" y="85" font-weight="bold" font-size="13" fill="#1a1a1a">1 · Relational &amp; query depth</text>
+
+  <rect x="32" y="108" width="252" height="62" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="42" y="126" class="b">Easy (20% of tasks) · 0% messy</text>
+  <text x="42" y="143" class="s">Single-table filter, count, or sum.</text>
+  <text x="42" y="159" class="m" fill="#52514e">e.g. "Hired after 2013 across sites?"</text>
+
+  <rect x="32" y="180" width="252" height="68" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="42" y="198" class="b">Medium (40% of tasks) · 50% messy</text>
+  <text x="42" y="215" class="s">2-table join (shard ⋈ lookup) + group</text>
+  <text x="42" y="230" class="s">argmax or weighted average/ratio.</text>
+  <text x="42" y="243" class="m" fill="#52514e">e.g. "Avg salary in Marketing?"</text>
+
+  <rect x="32" y="258" width="252" height="70" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="42" y="276" class="b">Hard (40% of tasks) · 90% messy</text>
+  <text x="42" y="293" class="s">Multi-step joins, MoM jumps, zero-fill</text>
+  <text x="42" y="308" class="s">reindexing, cross-shard distinct IDs.</text>
+  <text x="42" y="321" class="m" fill="#52514e">e.g. "Largest MoM revenue jump?"</text>
+
+  <!-- Layer 2: Deliberate CSV Mess -->
+  <rect x="312" y="64" width="276" height="276" rx="6" fill="#fdfdfd" stroke="#eb6834" stroke-width="1.8"/>
+  <rect x="312" y="64" width="276" height="32" rx="6" fill="#fdefe8" stroke="#eb6834" stroke-width="1.8"/>
+  <text x="324" y="85" font-weight="bold" font-size="13" fill="#1a1a1a">2 · Deliberate CSV corruption (57%)</text>
+
+  <rect x="324" y="108" width="252" height="50" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="334" y="125" class="m" font-weight="bold">dup</text>
+  <text x="372" y="125" class="s">Exact duplicate rows (~5%) injected;</text>
+  <text x="334" y="143" class="s">must call <tspan class="m">.drop_duplicates()</tspan> locally.</text>
+
+  <rect x="324" y="166" width="252" height="50" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="334" y="183" class="m" font-weight="bold">money</text>
+  <text x="382" y="183" class="s">Numbers stored as <tspan class="m">"$1,234.50"</tspan> or</text>
+  <text x="334" y="201" class="s"><tspan class="m">"42s"</tspan>; crashes naive <tspan class="m">.sum()</tspan> / <tspan class="m">.mean()</tspan>.</text>
+
+  <rect x="324" y="224" width="252" height="50" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="334" y="241" class="m" font-weight="bold">case</text>
+  <text x="375" y="241" class="s">Mixed casing &amp; stray spaces:</text>
+  <text x="334" y="259" class="s"><tspan class="m">" marketing "</tspan>, <tspan class="m">"MARKETING"</tspan> in keys.</text>
+
+  <rect x="324" y="282" width="252" height="46" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="334" y="299" class="m" font-weight="bold">dates</text>
+  <text x="378" y="299" class="s">4 mixed formats in one column:</text>
+  <text x="334" y="316" class="m" fill="#52514e">"2024-03-05" · "03/05/2024" · "Mar 5, 2024"</text>
+
+  <!-- Layer 3: Multi-Site Coordination Bottleneck -->
+  <rect x="604" y="64" width="276" height="276" rx="6" fill="#fdfdfd" stroke="#1baf7a" stroke-width="1.8"/>
+  <rect x="604" y="64" width="276" height="32" rx="6" fill="#e6f6f0" stroke="#1baf7a" stroke-width="1.8"/>
+  <text x="616" y="85" font-weight="bold" font-size="13" fill="#1a1a1a">3 · Multi-site coordination (K = 2..4)</text>
+
+  <rect x="616" y="108" width="252" height="68" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="626" y="126" class="b">Uneven random shards (0.5×–2.0×)</text>
+  <text x="626" y="143" class="s">Averaging site averages gives the wrong</text>
+  <text x="626" y="159" class="s">answer; lead must ask for <tspan class="m">(sum, count)</tspan>.</text>
+
+  <rect x="616" y="186" width="252" height="68" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="626" y="204" class="b">Global argmax &amp; cross-site sets</text>
+  <text x="626" y="221" class="s">Site winner ≠ global winner; workers</text>
+  <text x="626" y="237" class="s">must return full group tables or ID sets.</text>
+
+  <rect x="616" y="264" width="252" height="64" rx="4" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="626" y="282" class="b">Compound reliability: (1 − p_fail)^K</text>
+  <text x="626" y="299" class="s">One worker hallucinating or timing out</text>
+  <text x="626" y="315" class="s">corrupts the lead's final aggregation.</text>
+
+  <!-- Bottom empirical summary bar -->
+  <rect x="20" y="356" width="860" height="82" rx="6" fill="#f3f2ee" stroke="#b9b8b2" stroke-width="1.5"/>
+  <text x="36" y="378" font-weight="bold" font-size="13" fill="#1a1a1a">Where LFM2.5-2.6B sits on this difficulty spectrum (held-out eval, step 0 → step 30 with RLCR):</text>
+  <text x="36" y="400" class="s">· <tspan class="b">By query difficulty (org+solo):</tspan>  Easy <tspan class="m">50% → 70%</tspan>   |   Medium <tspan class="m">34% → 59%</tspan>   |   Hard (60% have 2 simultaneous messes) <tspan class="m">21% → 25%</tspan></text>
+  <text x="36" y="420" class="s">· <tspan class="b">By data corruption &amp; site count:</tspan>  Clean <tspan class="m">45% → 61%</tspan>   |   1 mess <tspan class="m">27% → 54%</tspan>   |   2 messes <tspan class="m">19% → 19%</tspan>   |   4-site wide (org) <tspan class="m">10% → 20%</tspan> (<tspan class="m" fill="#eb6834">0%</tspan> if lead-only)</text>
+</svg>

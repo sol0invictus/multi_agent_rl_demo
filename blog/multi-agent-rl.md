@@ -7,19 +7,16 @@ tags: [reinforcement-learning, multi-agent, agents, lora, vllm, experiments]
 
 *A from-scratch explanation of multi-agent RL from collective rewards, followed by a small, honest experiment on one consumer GPU.*
 
-**Short version.** I trained a 2.6B-parameter model (`LiquidAI/LFM2.5-2.6B`) with reinforcement learning while it worked as a small agent organisation: one **lead** agent that receives the question but cannot see any data, and two to four **worker** agents that each see only their own site's share of the CSV files. Every agent in the organisation is the same model. After 30 training steps (about 3.5 hours on one RTX 3090 Ti), multi-agent accuracy on held-out tasks went from **22.5% to 37.5%**, critical-path latency dropped by **23%**, and worker turn-limit failures fell by **55%**. Evaluated zero-shot as a single agent (`solo`, never trained), the same weights jumped from **45.0% to 62.5%** (+16.2 points combined across all 80 test rollouts, $p = 0.024$).
+**Short version.** Can you train a small 2.6B model (`LiquidAI/LFM2.5-2.6B`) to work as a multi-agent team—one **lead** agent that sees the question, and 2–4 **worker** agents that each see only their own shard of the data—using just a single outcome score for the whole team?
 
-To check whether training the workers actually mattered, I ran the exact same 30-step experiment a second time while training **only the lead's tokens** (`--train-roles lead`, freezing the workers on the shared policy). Multi-agent accuracy went nowhere (**30.0% → 27.5%**), and accuracy on 4-site organisations dropped to **0%**.
+Yes, **if you train the workers too:**
 
-| | Base model (step 0) | Train all roles (step 30) | Train lead only (step 30) |
-|---|---|---|---|
-| **Multi-agent (`org`, 40 tasks)** | 22.5% | **37.5%** (+15.0 pts) | 27.5% (−2.5 pts) |
-| **Single-agent (`solo`, 40 tasks, zero-shot)** | 45.0% | **62.5%** (+17.5 pts) | 50.0% (+7.5 pts) |
-| **Combined (`org + solo`, 80 rollouts)** | 33.8% | **50.0%** (+16.2 pts, $p = 0.024$) | 38.8% (+2.5 pts, $p = 0.86$) |
-| **Out-of-distribution 4-site tasks (`wide`)** | 10.0% | **20.0%** | **0.0%** |
-| **Critical-path latency / exhausted workers** | 18.3 calls / 1.18 | **14.1 calls / 0.53** | 16.8 calls / 1.10 |
+- **Training the whole team (`--train-roles all`)** for 30 steps (~3.5 hours on one RTX 3090 Ti) boosted multi-agent accuracy from **22.5% to 37.5%**, cut worker turn-limit failures in half (**−55%**), and made the team **23% faster**. Because every agent shares the same weights, those worker skills also transferred zero-shot to single-agent evaluation (`solo`: **45.0% → 62.5%**, $p = 0.024$ combined).
+- **Training only the lead (`--train-roles lead`)** while freezing the workers completely stalled (**30.0% → 27.5%**) and collapsed to **0%** on 4-site teams—because on a small model, a smart orchestrator cannot save workers that write buggy Python or misreport their local data.
 
-If you already know how multi-agent RL and GRPO work, skip to [The experiment](#the-experiment).
+![Progress and punchline of the experiment](./multi-agent-rl/fig_hero_punchline.png)
+
+If you already know how multi-agent RL and GRPO work, skip to [The experiment](#the-experiment) or [Implementation details](#implementation-details-capture-proxy-lfm2-and-single-gpu-tricks).
 
 ## Part 1: What is multi-agent RL?
 
@@ -55,6 +52,29 @@ Here is one actual test task (`o19900001`: average salary in Marketing across `a
 
 Before training, the lead asks each site for its average Marketing salary, gets back `$95,085.68` and `$85,105.62`, and averages the two averages to get `90,095.65`—off by nearly $\$5,000$. After training, the lead asks each site for its deduplicated salary sum and employee count, adds the numerators and denominators, and submits `$85,105.62`.
 
+### How hard are these tasks? (Three layers of difficulty)
+
+A natural question before looking at any RL curves is: *are these tasks too easy, or are they actually hard for a 2.6B model?*
+
+If a benchmark is too easy, the base model starts at 75%+ and saturates in a few steps. Here, the base `LFM2.5-2.6B` model solves only **22.5%** (`9/40`) of multi-agent tasks and **10%** (`1/10`) of 4-site tasks, and during training roughly **38%** of GRPO groups have zero reward variance because all 6 independent organisations fail the task. Even after 30 steps of RL, hard tasks and double-corrupted files remain around **19–25%**.
+
+That difficulty comes from three layers stacked on top of each other in `tasks.py` and `org_tasks.py`:
+
+![Three layers of task difficulty](./multi-agent-rl/fig_task_difficulty.svg)
+
+1. **Relational depth and randomised schemas (`easy` 20%, `medium` 40%, `hard` 40%).** Every task generates fresh synthetic tables (`250–500` rows in the main table) and randomly picks column spellings (`order_date` vs `date` vs `OrderDate`; `unit_price` vs `price` vs `UnitPrice`), so no agent can write a working script without inspecting the files first.
+   - **Easy (20%):** Single-table filters, counts, or sums across shards (*"How many employees were hired after 2013?"*).
+   - **Medium (40%):** Two-table joins between the sharded fact table and a replicated lookup table (`orders.csv` $\bowtie$ `customers.csv` or `employees.csv` $\bowtie$ `departments.csv`), combined with weighted averages, percentages, or group-by `argmax`.
+   - **Hard (40%):** Multi-step relational queries such as month-over-month revenue jumps (`mom_increase`), employees earning above their department's global average (`above_dept_avg`), cross-site distinct user percentages, or group-bys where users with zero sessions in `users.csv` must still be counted in the denominator (`plan_sessions_per_user`).
+2. **Deliberate CSV corruption (`mess` in 57% of tasks).** Half of `medium` tasks and **90% of `hard` tasks** inject one or two deliberate data corruptions (60% of dirty `hard` tasks stack **two** corruptions at the same time), while gold answers are always computed on the clean underlying tables:
+   - `dup`: ~5% exact duplicate rows are shuffled into the sharded table; workers must call `.drop_duplicates()` before aggregating.
+   - `money`: numeric columns are formatted as currency or duration strings (`"$1,234.50"` or `"42s"`), which silently concatenate or crash naive pandas `.sum()` / `.mean()`.
+   - `case`: join and filter keys have inconsistent casing and stray leading/trailing spaces (`" marketing "`, `"MARKETING"`).
+   - `dates`: date columns mix four different formats inside the same file (`"2024-03-05"`, `"03/05/2024"`, `"Mar 5, 2024"`, `"5 March 2024"`).
+3. **Multi-site coordination and compound worker failure ($K \in \{2, 3, 4\}$).** Because shards are weighted unevenly (`0.5×–2.0×`), the lead must decompose averages into `(sum, count)` and `argmax` into full per-group breakdowns. Worse, worker failures compound exponentially across sites: if a single worker has probability $p_{\text{fail}}$ of timing out after 6 turns, forgetting `.drop_duplicates()`, or misstating its local count, an organisation of $K$ workers only gets clean inputs with probability $(1 - p_{\text{fail}})^K$. Going from $K=2$ to $K=4$ (`wide`) cuts a $75\%$-reliable worker's team success rate from $56\%$ down to $32\%$.
+
+**Why `solo` scores higher than `org` (`45.0% → 62.5%` vs `22.5% → 37.5%`).** Notice what this environment models—and what it doesn't. Here, data partitioning is enforced by **sandbox boundaries** (simulating federated sites or permissioned data silos where no single agent is allowed to mount every directory), not by blowing past the model's context window. When the single-agent `solo` baseline is allowed to see all $K$ directories at once (`atlas/`, `boreal/`, …), it naturally scores higher than `org` because it avoids multi-agent communication errors. That makes `solo` an ideal **zero-shot transfer probe**: any improvement on `solo` after training exclusively on `org` comes purely from worker data-analysis skills flowing through the shared weights.
+
 ### One model plays every role ("$\theta$ as a gene pool")
 
 A natural question is: do we keep one set of model weights for the lead and another set for the workers?
@@ -63,84 +83,85 @@ Following [Avalon-M1](https://www.gr.inc/avalonm1.pdf), **every agent in the org
 
 That design has an immediate side effect that we can test: **skills learned by workers inside a multi-agent organisation should transfer zero-shot when the same model is run alone as a `solo` agent**, because `solo` uses the exact same data tools (`list_files`, `read_file`, `run_python`) as a worker.
 
-## Part 2: How the training works
+## Part 2: How RL from Collective Rewards (RLCR) works
 
-### Collective rewards and critical-path latency
+### Step 1: The credit-assignment problem—and why RLCR skips it
 
-When an organisation of $1 + K$ agents fails a task, who was at fault? Maybe the lead asked for averages instead of sums. Maybe `boreal` forgot to drop duplicate rows. Maybe `cobalt` wrote buggy Python six times in a row and ran out of turns.
+Imagine a 4-agent team (1 lead + 3 workers) gets the wrong answer on a task. **Whose fault was it?**
 
-Building a separate critic or per-turn judge to assign blame inside a multi-agent conversation is brittle and easy for RL to game. **Reinforcement Learning from Collective Rewards (RLCR)** does the simplest possible thing instead: score only the organisation's final submitted answer, and give that single score to the whole team.
+- Maybe the **lead** asked each site for its local average instead of asking for `sum` and `count`.
+- Maybe the **`boreal` worker** forgot to drop duplicate rows before summing.
+- Maybe the **`cobalt` worker** wrote buggy Python six times in a row, hit its turn limit, and returned nothing.
 
-For one organisation rollout $\tau$, the collective reward in `rollout.py` is:
+A tempting idea is to build a separate "judge" or per-agent critic to read the transcripts and hand out individual blame. In practice, per-turn judges are brittle and easy for RL to game: a worker can learn to write polite, confident-sounding replies that please the judge while still returning the wrong number.
+
+**Reinforcement Learning from Collective Rewards (RLCR)** does the simplest, most honest thing instead: **grade only the team's final answer, and give that exact same score to every agent on the team.**
+
+In `rollout.py`, a team rollout $\tau$ gets a collective reward of **1** if the lead's submitted answer matches the ground-truth answer (plus a small speed bonus of up to **+0.1**), and **0** if it is wrong:
 
 $$
 r(\tau) \;=\; \mathbb{1}[\text{correct}] \cdot \Big(1 + 0.1 \cdot \mathrm{clip}\big(\tfrac{18 - L_{\text{crit}}(\tau)}{14},\, 0,\, 1\big)\Big)
 $$
 
-That is $1$ if the lead's final answer matches the gold answer on the full clean data, plus an efficiency bonus of up to $0.1$ for finishing with a short **critical-path latency** $L_{\text{crit}}$, and $0$ if the answer is wrong.
+No agent gets any points unless the team's final answer is actually right.
 
-Why *critical-path* latency instead of total model calls? In `org_harness`, each lead turn costs $1$ call. If the lead asks three workers in the same turn, those three workers run at the same time, so the wall-clock cost of that round is the **slowest** worker ($\max_i L_{\text{worker},i}$), not the sum ($\sum_i L_{\text{worker},i}$):
+### Step 2: Why "critical-path latency" teaches real teamwork
+
+What is $L_{\text{crit}}(\tau)$ in that speed bonus? Instead of counting the *total* number of model calls across all agents, we count calls along the **critical path**—the longest chain of sequential steps from start to finish:
 
 $$
 L_{\text{crit}} \;=\; \sum_{t=1}^{T_{\text{lead}}} \Big(1 + \max_{i \in \text{asks}(t)} L_{\text{worker},i}^{(t)}\Big)
 $$
 
-Measuring latency along the critical path rewards two coordination habits at once: the lead earns a higher reward by **fanning out requests to all sites in parallel** instead of polling sites one by one, and workers earn a higher reward by **answering in one clean script** instead of dragging out the slowest branch.
+In plain English:
+- Every time the lead speaks, the clock ticks by **1**.
+- If the lead asks three workers for data in the **same turn**, all three workers run in parallel, so the team only waits for the **slowest worker** ($\max_i L_{\text{worker},i}$).
+- If the lead asks the three workers **one after another** across three separate turns, the team pays the **sum** of all three ($\sum_i L_{\text{worker},i}$).
 
-### GRPO across organisations, and who gets the advantage
+Rewarding short critical-path latency teaches two teamwork habits at once:
+1. **The lead learns to fan out in parallel**—asking `atlas`, `boreal`, and `cobalt` in a single turn instead of interviewing them one by one.
+2. **Each worker learns to finish quickly**—inspecting its CSV and answering in one clean Python script so it doesn't become the bottleneck holding up the team.
 
-To turn rewards into a learning signal without a value network, `train.py` uses **GRPO** (Group Relative Policy Optimization). For each training task, we spin up $G = 6$ independent organisations in parallel, score each organisation's final answer, and compare the 6 attempts against each other:
+### Step 3: Comparing 6 teams on the same task (GRPO)
+
+How do we turn a single team score $r(\tau)$ into a gradient update without training a separate value network? We use **GRPO** (Group Relative Policy Optimization) across whole organisations.
+
+For each training question, we spin up **$G = 6$ independent organisations** in parallel, let each team attempt the question, and compare their 6 scores against each other:
 
 ![One GRPO group of organisations](./multi-agent-rl/fig_rlcr_grpo.svg)
 
-Organisation $g$'s collective advantage is how many standard deviations its reward sits above or below the group mean:
+Each team $g$'s **collective advantage** $A_g$ is simply how much better or worse that team did compared to the average of the 6 teams on that exact question:
 
 $$
 A_g \;=\; \frac{r_g - \bar r}{\max(\sigma_r,\, 0.05)}
 $$
 
-If all 6 organisations get the task wrong (or all 6 get the exact same score), $\sigma_r = 0$, the group is "flat", and it is dropped from the gradient step. Otherwise, we have a choice about **who inside organisation $g$ receives $A_g$** (`collective_samples` in `rollout.py`):
+- **Teams that beat the group average ($A_g > 0$)** have their actions reinforced (made more likely).
+- **Teams that fell below the group average ($A_g < 0$)** have their actions pushed down (made less likely).
+- **If all 6 teams failed (or all 6 tied)**, $\sigma_r = 0$; there is nothing to compare, so the group is dropped.
 
-- **`--train-roles all` (Avalon-M1 RLCR).** Every token sampled by the lead *and* every token sampled by all $K$ workers in organisation $g$ gets the same advantage $A_g$. If the organisation succeeded, both the lead's decomposition and the workers' Python scripts are reinforced; if it failed, both are pushed down.
-- **`--train-roles lead` (Kimi PARL style).** Only the lead's sampled tokens get $A_g$; worker trajectories are masked out. This treats the workers as a frozen environment and asks whether training the orchestrator alone is enough.
+Why does this solve credit assignment without a per-agent judge? Because across 6 parallel teams on the same task, **random mistakes average out**. A worker habit that consistently helps teams get the right answer (like calling `.drop_duplicates()` and printing both `sum` and `count`) lands in winning teams ($A_g > 0$) far more often than in losing teams, so RL steadily amplifies it.
 
-### LoRA: fitting a multi-agent trainer and vLLM on one 24 GB GPU
-
-In a single-agent run, one rollout is one conversation. In a multi-agent run, one rollout with $K=3$ sites is **four** separate multi-turn conversations (1 lead + 3 workers), totaling ~10,000–12,000 tokens per rollout, or ~250,000 tokens across a batch of 24 organisations. Meanwhile, the vLLM inference server is already sitting on 45% of the RTX 3090 Ti's 24 GB of VRAM.
-
-Full-parameter fine-tuning of a 2.6B model (plus AdamW momentum and variance states) would blow past 24 GB immediately. Instead, `train.py` uses **LoRA** (Low-Rank Adaptation): freeze all $2.697\text{B}$ base weights $W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ in bfloat16, and attach a trainable low-rank update to each linear projection:
-
-$$
-W \;=\; W_0 + \frac{\alpha}{r}\, B A, \qquad A \in \mathbb{R}^{r \times d_{\text{in}}},\; B \in \mathbb{R}^{d_{\text{out}} \times r}
-$$
-
-Here $r = 32$ and $\alpha = 32$ ($\alpha/r = 1$) across all seven attention and MLP projections in every layer (`q_proj`, `k_proj`, `v_proj`, `out_proj`, `w1`, `w2`, `w3`). That comes to **40,271,872 trainable parameters**—just **1.47%** of the 2.74B total—so the AdamW state and gradients comfortably fit alongside vLLM in ~10.6 GB of peak trainer VRAM.
-
-### The capture proxy and three LFM2 implementation details
-
-Just like in `rl_harness`, the harnesses in `agents.py` never touch PyTorch or tokenizers. Each agent in rollout `rid` is handed its own OpenAI-compatible URL—`http://127.0.0.1:8100/r/<rid>-lead/v1`, `/r/<rid>-atlas/v1`, `/r/<rid>-boreal/v1`—pointing at `CaptureProxy` (`proxy.py`):
-
-![System overview](./multi-agent-rl/fig_system.svg)
-
-The proxy renders each agent's chat messages with the model's chat template, forwards the **exact token IDs** to vLLM's `/v1/completions`, and records `(prompt_ids, completion_ids, vllm_logprobs)` under that agent's ID.
-
-Because neither the lead nor the workers ever compact or rewrite their history, every new turn of an agent extends its previous turn token-for-token (`proxy.n_extended`). At the end of the rollout, `to_rows` stitches each agent's calls into **one training row**, so a 3-site organisation becomes 4 rows (1 lead row + 3 worker rows):
-
-![How an organisation rollout becomes training rows](./multi-agent-rl/fig_tokens.svg)
-
-The trainer then minimizes the truncated importance-sampling policy gradient loss over all sampled tokens (`mask = 1`) in the selected roles:
-
-$$
-\mathcal{L}(\theta) \;=\; -\frac{1}{N}\sum_{a \in \text{roles}} \sum_{t:\, m_{a,t}=1} \min\!\Big(\frac{\pi_\theta(y_{a,t})}{\mu(y_{a,t})},\, 2\Big)\, A_g \,\log \pi_\theta(y_{a,t})
-$$
-
-Three hardware and architecture details matter here:
-
-1. **Merged-weight sync (`--sync merge`).** Normally you would keep the base model in vLLM and hot-swap the 80 MB LoRA adapter each step. On this machine, vLLM's LoRA decode path for `LFM2.5-2.6B` is about **15× slower** than base-model decode. So after every gradient step, `publish_merged` folds $\frac{\alpha}{r}BA$ into the base weights in memory, writes `policy/model.safetensors`, and hits vLLM's `/collective_rpc` (`reload_weights`) plus `/reset_prefix_cache`. Reloading the 5 GB file takes ~2 seconds and keeps generation at full speed.
-2. **No sequence packing.** `LFM2.5-2.6B` is a hybrid architecture that interleaves gated short-convolution (`Lfm2ShortConv`) layers with SDPA attention layers. If you pack two different agents' rows into a single 1D sequence to save padding, the short-conv kernel leaks state across the boundary between agent 1 and agent 2. Every agent row is therefore forwarded as its own clean sequence with activation checkpointing.
-3. **Tandem-repeat masking (`tandem_repeat`).** In a multi-agent rollout, one worker can occasionally get stuck repeating a short phrase until it hits `max_tokens`, while the rest of the organisation still manages to guess or compute the right answer. Without protection, a positive collective advantage $A_g > 0$ would reinforce the degenerate loop. `to_rows` detects any call ending in $\ge 300$ tokens of a repeating $1\text{–}32$ token period and zeros out its loss mask.
+That brings us to the central experimental question of this post: **once team $g$ gets its score $A_g$, which agents inside the team should actually be updated?**
 
 ## The experiment
+
+### The two training regimes we ran: training all roles vs. training only the lead
+
+To test whether multi-agent RL needs to train every agent in the organisation or only the orchestrator at the top, we ran the exact same 30-step training loop twice from fresh `LiquidAI/LFM2.5-2.6B` weights under two different gradient-masking regimes (`collective_samples` in `rollout.py`):
+
+![Side-by-side architecture of the two training regimes](./multi-agent-rl/fig_training_regimes.svg)
+
+1. **Case 1 — Train all roles (`--train-roles all`, `org_small`, Avalon-M1 RLCR).** Every organisation rollout with $K$ sites produces $1 + K$ training rows: one row for the lead (`ask`, `submit`) and $K$ rows for the site workers (`list_files`, `read_file`, `run_python`, `reply`). All $1 + K$ rows receive the organisation's group-relative advantage $A_g$ and backpropagate into the shared LoRA parameters ($\sim 136\text{k}$ trained tokens per step across $\sim 52$ rows). When an organisation solves a task quickly, the gradient reinforces **both** how the lead decomposed the problem and how each worker inspected and cleaned its CSV shard in Python.
+2. **Case 2 — Train lead only (`--train-roles lead`, `org_small_lead`, Kimi PARL style).** The rollouts, tasks, RNG seeds, and collective rewards are identical to Case 1, and the workers still share the exact same live policy weights $\pi_\theta$ as the lead. However, during the backward pass, **all $K$ worker rows are dropped** (`roles = {"lead"}`), leaving only the lead's trajectory ($\sim 36\text{k}$ trained tokens per step across $\sim 15$ rows). This cuts the backward pass time by $3\times$ (`57s` vs `182s`), but it means **not a single gradient update ever touches `run_python`, `read_file`, or `reply()`**.
+
+Here is the head-to-head summary of what those two training regimes actually did to the model over 30 steps:
+
+![Quantitative comparison of the two training regimes](./multi-agent-rl/fig_regimes_comparison.png)
+
+- **Gradient budget by role (left panel).** Both runs generate roughly the same number of tokens during rollout (~9k worker tokens + ~2.5k lead tokens per organisation), but Case 2 discards all worker tokens (~74% of all generated tokens).
+- **Gains from step 0 to step 30 (middle panel).** Training all roles (Case 1, blue) improves every axis simultaneously: held-out `org` accuracy rises **+15.0 percentage points** (`22.5% → 37.5%`), zero-shot `solo` transfer rises **+17.5 points** (`45.0% → 62.5%`), out-of-distribution 4-site `wide` accuracy doubles (**+10.0 points**, `10% → 20%`), worker turn-limit exhaustion drops by **55%**, and critical-path latency drops by **23%**. Training only the lead (Case 2, orange) moves multi-agent `org` accuracy slightly backward (**−2.5 points**, `30.0% → 27.5%`), collapses to **0%** on 4-site `wide` tasks (**−20.0 points**), and leaves worker turn exhaustion virtually unchanged (**−7%**, `1.18 → 1.10`).
+- **Paired task wins vs. losses (right panel).** Across all 80 paired held-out evaluations (`org + solo`), Case 1 fixes **21** tasks that the base model failed while breaking only **8** ($p = 0.024$, exact two-sided McNemar test). Case 2 fixes **16** and breaks **14** ($p = 0.856$, indistinguishable from noise).
 
 ### Setup on one GPU
 
@@ -276,22 +297,52 @@ breakdown, I will go with 28.
 
 No amount of lead-only RL can fix a worker that lies about what is in its file.
 
-### 4. What the reward didn't care about: `final_text` endings
+## Implementation details: capture proxy, LFM2, and single-GPU tricks
+
+Running multi-agent RL with 24 concurrent organisations (72–96 agents per step) plus a live vLLM server and a PyTorch trainer on a single 24 GB GPU requires several systems choices that sit underneath the RL loop.
+
+### 1. The token-capturing proxy (`proxy.py`) and append-only stitching (`rollout.py`)
+
+The agent harnesses in `agents.py` never touch PyTorch or tokenizers. Each agent in rollout `rid` is handed its own OpenAI-compatible URL—`http://127.0.0.1:8100/r/<rid>-lead/v1`, `/r/<rid>-atlas/v1`, `/r/<rid>-boreal/v1`—pointing at `CaptureProxy` (`proxy.py`):
+
+![System overview](./multi-agent-rl/fig_system.svg)
+
+The proxy renders each agent's chat messages with the model's chat template, forwards the **exact token IDs** to vLLM's `/v1/completions`, and records `(prompt_ids, completion_ids, vllm_logprobs)` under that agent's ID.
+
+Because neither the lead nor the workers ever compact or rewrite their history, every new turn of an agent extends its previous turn token-for-token (`proxy.n_extended`). At the end of the rollout, `to_rows` stitches each agent's calls into **one training row**, so a 3-site organisation becomes 4 rows (1 lead row + 3 worker rows):
+
+![How an organisation rollout becomes training rows](./multi-agent-rl/fig_tokens.svg)
+
+The trainer then minimizes the truncated importance-sampling policy gradient loss over all sampled tokens (`mask = 1`) in the selected roles:
+
+$$
+\mathcal{L}(\theta) \;=\; -\frac{1}{N}\sum_{a \in \text{roles}} \sum_{t:\, m_{a,t}=1} \min\!\Big(\frac{\pi_\theta(y_{a,t})}{\mu(y_{a,t})},\, 2\Big)\, A_g \,\log \pi_\theta(y_{a,t})
+$$
+
+### 2. Three LFM2 and vLLM quirks on one GPU
+
+1. **Merged-weight sync (`--sync merge`).** Normally you would keep the base model in vLLM and hot-swap the 80 MB LoRA adapter each step (`Appendix`). On this machine, vLLM's LoRA decode path for `LFM2.5-2.6B` is about **15× slower** than base-model decode. So after every gradient step, `publish_merged` folds the LoRA update $\frac{\alpha}{r}BA$ into the base weights in memory, writes `policy/model.safetensors`, and hits vLLM's `/collective_rpc` (`reload_weights`) plus `/reset_prefix_cache`. Reloading the 5 GB file takes ~2 seconds and keeps generation at full speed.
+2. **No sequence packing across agents.** `LFM2.5-2.6B` is a hybrid architecture that interleaves gated short-convolution (`Lfm2ShortConv`) layers with SDPA attention layers. If you pack two different agents' rows into a single 1D sequence to save padding, the short-conv kernel leaks state across the boundary between agent 1 and agent 2. Every agent row is therefore forwarded as its own clean sequence with activation checkpointing.
+3. **Tandem-repeat masking (`tandem_repeat`).** In a multi-agent rollout, one worker can occasionally get stuck repeating a short phrase until it hits `max_tokens`, while the rest of the organisation still manages to guess or compute the right answer. Without protection, a positive collective advantage $A_g > 0$ would reinforce the degenerate loop. `to_rows` detects any call ending in $\ge 300$ tokens of a repeating $1\text{–}32$ token period and zeros out its loss mask.
+
+### 3. Isolated per-site Docker sandboxes (`sandbox.py`)
+
+For each organisation rollout, `sandbox.py` creates one host workspace with a subdirectory per site (`atlas/`, `boreal/`, …) and runs a single network-disabled Docker container (`harness-sandbox:latest`, `--network none`, `--memory 512m`, `--cpus 1`) with `Workspace.sub(site)` chdir'd into each worker's directory. Up to 16 containers run concurrently (`SANDBOX_CONCURRENCY = 16`), so parallel `ask` calls execute `python3 _script.py` simultaneously without seeing sibling sites' files.
+
+### 4. Episode termination and the `final_text` shortcut (`agents.py`)
 
 Look back at the left panel of the coordination figure (*"How org episodes end"*). At step 30 of `org_small`, only **18%** (`7/40`) of episodes end with the lead calling `submit(answer)`. Another **80%** (`32/40`) end with `status = "final_text"`, meaning the lead wrote a plain-text message with no tool call.
 
-Why? In `agents.py` (line 168), if the lead replies without a tool call, `org_harness` immediately ends the episode and passes `m.content` to the grader:
+Why? In `agents.py`, if the lead replies without a tool call, `org_harness` immediately ends the episode and passes `m.content` to the grader:
 
 ```python
 if not m.tool_calls:
     return done(m.content, "final_text", t + 1)
 ```
 
-Because `tasks.grade` extracts the last number from a plain-text response, stating *"Therefore, the total is **156**"* in plain text earns the **exact same reward** as calling `submit(answer="156")`—and saves one tool-call token sequence. Just like in `multi-harness-rl`, the model drifts toward whichever habit earns the same reward with less effort.
+Because `tasks.grade` extracts the last number from a plain-text response, stating *"Therefore, the total is **156**"* in plain text earns the **exact same reward** as calling `submit(answer="156")`—and saves one tool-call token sequence. On two test tasks (`o19900003` in `org_small` and `o20200002` in `org_small_lead`), however, the lead writes an intermediate plain-text summary (*"Now I have the data from all sites, let me compile the monthly counts…"*), expecting to call `submit` on the next turn—and the harness cuts the episode off mid-thought. Giving the lead a one-turn nudge when it writes plain text before `LEAD_MAX_TURNS` (the way `pytools` does in `rl_harness`) is an easy fix for the next run.
 
-Here, however, that shortcut occasionally bites the model. On two tasks (`o19900003` in `org_small` and `o20200002` in `org_small_lead`), the lead receives the worker replies and writes a plain-text "thinking out loud" message (*"Now I have the data from all sites, let me compile the monthly counts…"*), expecting to call `submit` on the next turn—and the harness cuts the episode off mid-thought. Giving the lead a one-turn nudge when it writes plain text before `LEAD_MAX_TURNS` (the way `pytools` does in `rl_harness`) is an easy fix for the next run.
-
-### 5. Training health
+### 5. Training health and vLLM-to-trainer KL verification
 
 ![Training curves](./multi-agent-rl/fig_training.png)
 
@@ -350,3 +401,15 @@ make test
 ../rl_harness/.venv-lfm/bin/python analysis/make_blog_figures.py --out blog/multi-agent-rl
 NODE_PATH=/home/webpage/node_modules node blog/build.mjs
 ```
+
+## Appendix: LoRA parameterization and memory budget on one 24 GB GPU
+
+In a single-agent run, one rollout is one conversation. In a multi-agent run, one rollout with $K=3$ sites is **four** separate multi-turn conversations (1 lead + 3 workers), totaling ~10,000–12,000 tokens per rollout, or ~250,000 tokens across a batch of 24 organisations. Meanwhile, the vLLM inference server is already sitting on 45% (~10.8 GB) of the RTX 3090 Ti's 24 GB of VRAM.
+
+Full-parameter fine-tuning of a 2.6B model in bfloat16 (~5.4 GB of weights + ~5.4 GB of gradients + ~21.6 GB of fp32 AdamW master weights, momentum, and variance) would blow past 24 GB immediately. Instead, `train.py` uses **LoRA** (Low-Rank Adaptation): freeze all $2.697\text{B}$ base weights $W_0 \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ in bfloat16, and attach a trainable low-rank update to each linear projection:
+
+$$
+W \;=\; W_0 + \frac{\alpha}{r}\, B A, \qquad A \in \mathbb{R}^{r \times d_{\text{in}}},\; B \in \mathbb{R}^{d_{\text{out}} \times r}
+$$
+
+Here $r = 32$ and $\alpha = 32$ ($\alpha/r = 1$), with $A$ initialized from $\mathcal{N}(0, 0.02^2)$ and $B = 0$ so training begins from the exact base policy. Adapters are attached across all seven attention and SwiGLU MLP projections in every layer (`q_proj`, `k_proj`, `v_proj`, `out_proj`, `w1`, `w2`, `w3`). That comes to **40,271,872 trainable parameters**—just **1.47%** of the 2.74B total—so the frozen base model, LoRA gradients, AdamW state, and activation-checkpointed backward pass fit comfortably alongside vLLM in **~10.6 GB** of peak trainer VRAM.
