@@ -60,7 +60,7 @@
     <rect x="754" y="206" width="44" height="44" fill="#d64545"/><text x="776" y="266" text-anchor="middle" class="m">-0.91</text>
 
     <line x1="0" y1="206" x2="840" y2="206" stroke="#52514e"/>
-    <text x="0" y="124" class="s">collective advantage A_g = (r_g − mean) / max(σ, 0.05)</text>
+    <text x="0" y="124" class="s">collective advantage A_g = (r_g − mean) / (σ + 0.05)</text>
   </g>
 
   <line x1="20" y1="348" x2="860" y2="348" stroke="#e5e5e5"/>
@@ -68,7 +68,7 @@
 
   <!-- Option A: All roles -->
   <rect x="20" y="386" width="410" height="106" rx="6" fill="#eaf2fc" stroke="#2a78d6" stroke-width="2"/>
-  <text x="34" y="410" font-weight="bold" fill="#1a1a1a">--train-roles all  (Avalon-M1 RLCR · org_small)</text>
+  <text x="34" y="410" font-weight="bold" fill="#1a1a1a">Train all roles  (Avalon-M1 RLCR · org_small)</text>
   <text x="34" y="430" class="s">Every sampled token of <tspan font-weight="bold" fill="#1a1a1a">lead + worker_1 + … + worker_K</tspan> gets A_g.</text>
   <text x="34" y="448" class="s">· Lead learns to decompose questions and ask in parallel.</text>
   <text x="34" y="466" class="s">· Workers learn to write clean pandas scripts and call reply().</text>
@@ -76,7 +76,7 @@
 
   <!-- Option B: Lead only -->
   <rect x="450" y="386" width="410" height="106" rx="6" fill="#fdefe8" stroke="#eb6834" stroke-width="2"/>
-  <text x="464" y="410" font-weight="bold" fill="#1a1a1a">--train-roles lead  (Kimi PARL style · org_small_lead)</text>
+  <text x="464" y="410" font-weight="bold" fill="#1a1a1a">Train lead only  (Kimi PARL style · org_small_lead)</text>
   <text x="464" y="430" class="s">Only <tspan font-weight="bold" fill="#1a1a1a">lead</tspan> tokens get A_g; all worker rows are dropped.</text>
   <text x="464" y="448" class="s">· ~3.5× fewer training tokens per step (lead rows only).</text>
   <text x="464" y="466" class="s">· Workers never improve (exhaustion stays at 1.10/task).</text>

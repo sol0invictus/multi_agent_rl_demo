@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="12">
+  <title>Anatomy of one task (o19900001): the lead sees only the question; employees.csv is split unevenly between boreal (157 rows) and cobalt (125 rows) with a messy departments.csv copied to both; the right answer needs per-site sums and counts pooled into 3,659,500 / 43 = 85,104.65.</title>
+  <style>
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 10.5px; fill: #1a1a1a; white-space: pre; }
+    .r { font-size: 10px; fill: #666; letter-spacing: 0.04em; }
+    .h { font-size: 14px; font-weight: bold; fill: #1a1a1a; }
+    .s { font-size: 11px; fill: #52514e; }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#52514e"/>
+    </marker>
+  </defs>
+  <rect width="900" height="470" fill="#fdfdfd"/>
+
+  <!-- ===== 1: the question ===== -->
+  <rect x="20" y="20" width="270" height="378" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="2"/>
+  <text x="34" y="46" class="h">1  The question</text>
+  <text x="34" y="64" class="s">all the lead agent ever sees</text>
+
+  <rect x="30" y="78" width="250" height="124" rx="4" fill="#eaf2fc" stroke="#2a78d6"/>
+  <text x="42" y="100" fill="#1a1a1a">“What is the average salary in</text>
+  <text x="42" y="117" fill="#1a1a1a">the Finance department? Round</text>
+  <text x="42" y="134" fill="#1a1a1a">to 2 decimal places.”</text>
+  <text x="42" y="158" class="s">Note: dept_name values are</text>
+  <text x="42" y="174" class="s">inconsistently capitalised and</text>
+  <text x="42" y="190" class="s">may have stray spaces.</text>
+
+  <text x="34" y="226" class="r">PLUS A DESCRIPTION OF THE SITES</text>
+  <text x="34" y="246" class="m">sites:   boreal, cobalt</text>
+  <text x="34" y="263" class="m">sharded: employees.csv</text>
+  <text x="34" y="280" class="m">copied:  departments.csv</text>
+
+  <line x1="34" y1="300" x2="276" y2="300" stroke="#e5e5e5"/>
+  <text x="34" y="324" font-weight="bold" fill="#d64545">No file access, no code tools</text>
+  <text x="34" y="344" class="s">Its only actions are</text>
+  <text x="34" y="362" class="m">ask(site, request)</text>
+  <text x="34" y="380" class="m">submit(answer)</text>
+
+  <!-- ===== 2: the data ===== -->
+  <text x="310" y="46" class="h">2  The data, split across sites</text>
+
+  <rect x="370" y="60" width="180" height="44" rx="5" fill="#f3f2ee" stroke="#b9b8b2" stroke-dasharray="4 3"/>
+  <text x="460" y="78" text-anchor="middle" font-weight="bold" fill="#1a1a1a">employees.csv (clean)</text>
+  <text x="460" y="95" text-anchor="middle" class="s">282 rows · no agent sees this</text>
+
+  <line x1="420" y1="104" x2="384" y2="134" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="500" y1="104" x2="536" y2="134" stroke="#52514e" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="460" y="126" text-anchor="middle" class="s">uneven split</text>
+
+  <g transform="translate(310,138)">
+    <rect width="145" height="146" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+    <text x="12" y="22" font-weight="bold" fill="#1a1a1a">boreal/</text>
+    <text x="12" y="41" class="m">employees.csv</text>
+    <text x="12" y="57" class="s">157 rows, 23 in Finance</text>
+    <line x1="12" y1="67" x2="133" y2="67" stroke="#d8d7d1"/>
+    <text x="12" y="84" class="m">7000 D12 70000</text>
+    <text x="12" y="99" class="m">7003 D11 43500</text>
+    <text x="12" y="114" class="m">…</text>
+    <text x="12" y="135" class="m" fill="#52514e">+ departments.csv</text>
+  </g>
+
+  <g transform="translate(465,138)">
+    <rect width="145" height="146" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+    <text x="12" y="22" font-weight="bold" fill="#1a1a1a">cobalt/</text>
+    <text x="12" y="41" class="m">employees.csv</text>
+    <text x="12" y="57" class="s">125 rows, 20 in Finance</text>
+    <line x1="12" y1="67" x2="133" y2="67" stroke="#d8d7d1"/>
+    <text x="12" y="84" class="m">7001 D14 95400</text>
+    <text x="12" y="99" class="m">7005 D13 87700</text>
+    <text x="12" y="114" class="m">…</text>
+    <text x="12" y="135" class="m" fill="#52514e">+ departments.csv</text>
+  </g>
+
+  <rect x="310" y="298" width="300" height="100" rx="6" fill="#fdfdfd" stroke="#eb6834" stroke-width="1.5"/>
+  <text x="322" y="318" font-weight="bold" fill="#1a1a1a">departments.csv (copied to both)</text>
+  <text x="322" y="340" class="m">D10 "ENGINEERING"</text>
+  <text x="322" y="357" class="m">D13 "Finance␣"</text>
+  <text x="470" y="340" class="m">D15 "␣Operations"</text>
+  <text x="470" y="357" class="m">D16 "LEGAL"</text>
+  <text x="322" y="381" class="s">mess: matching dept_name == "Finance" finds no rows</text>
+
+  <!-- ===== 3: combining ===== -->
+  <rect x="630" y="20" width="250" height="378" rx="6" fill="#fdfdfd" stroke="#1a1a1a" stroke-width="1.5"/>
+  <text x="644" y="46" class="h">3  Combining the pieces</text>
+  <text x="644" y="64" class="s">pool per-site sums and counts</text>
+
+  <rect x="640" y="78" width="230" height="122" rx="4" fill="#e6f6f0" stroke="#1baf7a"/>
+  <text x="652" y="100" class="m">boreal  2,072,200 / 23</text>
+  <text x="652" y="118" class="m">cobalt  1,587,300 / 20</text>
+  <line x1="652" y1="128" x2="858" y2="128" stroke="#1baf7a"/>
+  <text x="652" y="146" class="m">pooled  3,659,500 / 43</text>
+  <text x="652" y="166" class="m" font-weight="bold">      = 85,104.65  ✓</text>
+  <text x="652" y="189" class="s">gold, computed on the clean table</text>
+
+  <text x="644" y="224" class="r">TEMPTING WRONG ANSWERS</text>
+  <rect x="640" y="232" width="230" height="46" rx="4" fill="#fdefe8" stroke="#d64545"/>
+  <text x="652" y="251" class="m" fill="#d64545">90,095.65  ✗</text>
+  <text x="652" y="268" class="s">boreal's average alone (base org)</text>
+
+  <rect x="640" y="284" width="230" height="46" rx="4" fill="#fdefe8" stroke="#d64545"/>
+  <text x="652" y="303" class="m" fill="#d64545">84,730.33  ✗</text>
+  <text x="652" y="320" class="s">average of the two site averages</text>
+
+  <rect x="640" y="336" width="230" height="46" rx="4" fill="#fdefe8" stroke="#d64545"/>
+  <text x="652" y="355" class="m" fill="#d64545">72,997.16  ✗</text>
+  <text x="652" y="372" class="s">no Finance filter (base solo)</text>
+
+  <!-- ===== grader banner ===== -->
+  <rect x="20" y="416" width="860" height="40" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="34" y="440" fill="#1a1a1a"><tspan font-weight="bold">Grader:</tspan> takes the last number in the lead's final answer and checks it is within 0.1% of gold. Every agent on the team gets that same reward.</text>
+</svg>

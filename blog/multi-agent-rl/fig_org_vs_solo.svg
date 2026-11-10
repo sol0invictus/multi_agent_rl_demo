@@ -1,120 +1,93 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 560" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="12">
-  <title>One partitioned task (o19900001: average salary in Marketing across atlas and boreal) inside an untrained organisation, a trained organisation, and the single-agent solo harness.</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 446" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="12">
+  <title>One partitioned task (o19900001: average Finance salary across boreal and cobalt) in the base organisation, the trained organisation, and the single-agent solo harness, using the logged evaluation results.</title>
   <style>
-    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 10.5px; fill: #1a1a1a; }
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 10.5px; fill: #1a1a1a; white-space: pre; }
     .r { font-size: 10px; fill: #666; letter-spacing: 0.04em; }
     .h { font-size: 14px; font-weight: bold; fill: #1a1a1a; }
     .s { font-size: 11px; fill: #52514e; }
   </style>
-  <rect width="880" height="560" fill="#fdfdfd"/>
+  <rect width="880" height="446" fill="#fdfdfd"/>
 
   <!-- task banner -->
-  <rect x="20" y="14" width="840" height="48" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
-  <text x="34" y="34" font-weight="bold" fill="#1a1a1a">Same question, partitioned across 2 sites (atlas and boreal) with uneven row shares</text>
-  <text x="34" y="52" fill="#52514e">“What is the average salary of Marketing employees across all sites?”  ·  mess: duplicate rows  ·  gold answer: $85,105.62</text>
+  <rect x="20" y="14" width="840" height="56" rx="6" fill="#f3f2ee" stroke="#b9b8b2"/>
+  <text x="34" y="35" font-weight="bold" fill="#1a1a1a">o19900001 · “What is the average salary in the Finance department?” · 2 sites · messy department names</text>
+  <text x="34" y="56" fill="#52514e">boreal: 23 Finance employees, $2,072,200  ·  cobalt: 20 Finance employees, $1,587,300  ·  gold = 3,659,500 / 43 = 85,104.65</text>
 
   <!-- ===== Column 1: Base org (wrong) ===== -->
-  <g transform="translate(20,78)">
-    <rect width="270" height="466" rx="6" fill="#fdfdfd" stroke="#d64545" stroke-width="2"/>
+  <g transform="translate(20,86)">
+    <rect width="270" height="346" rx="6" fill="#fdfdfd" stroke="#d64545" stroke-width="2"/>
     <text x="14" y="25" class="h">Base org (step 0)</text>
-    <text x="14" y="43" class="s">averages the site averages → wrong</text>
+    <text x="14" y="43" class="s">loses one site's data → wrong</text>
 
-    <text x="14" y="68" class="r">LEAD · PARALLEL ASK</text>
-    <rect x="10" y="74" width="250" height="42" rx="4" fill="#fdefe8" stroke="#eb6834"/>
-    <text x="18" y="90" class="m">ask("atlas", "avg Marketing salary?")</text>
-    <text x="18" y="106" class="m">ask("boreal", "avg Marketing salary?")</text>
+    <text x="14" y="68" class="r">ROLLOUT</text>
+    <rect x="10" y="74" width="250" height="64" rx="4" fill="#f3f2ee"/>
+    <text x="18" y="93" class="m">lead turns       6 / 6 (cap)</text>
+    <text x="18" y="111" class="m">workers at cap   3 requests</text>
+    <text x="18" y="129" class="m">critical path    30 calls</text>
 
-    <text x="14" y="134" class="r">WORKERS · RUN PYTHON &amp; REPLY</text>
-    <rect x="10" y="140" width="250" height="52" rx="4" fill="#f3f2ee"/>
-    <text x="18" y="157" class="m">atlas:  avg = $95,085.68</text>
-    <text x="18" y="173" class="m">boreal: avg = $85,105.62</text>
-    <text x="18" y="187" class="s">(neither worker reports how many rows)</text>
+    <text x="14" y="160" class="r">FINAL ANSWER</text>
+    <rect x="10" y="166" width="250" height="28" rx="4" fill="#fdefe8" stroke="#d64545"/>
+    <text x="18" y="184" class="m" fill="#d64545">submit("90,095.65")  ✗</text>
 
-    <text x="14" y="216" class="r">LEAD · THINKING</text>
-    <rect x="10" y="222" width="250" height="54" rx="4" fill="#f3f2ee"/>
-    <text x="18" y="239" class="m">(95085.68 + 85105.62) / 2</text>
-    <text x="18" y="255" class="m">= 90095.65</text>
-    <text x="18" y="270" class="s">unweighted mean of uneven shards</text>
+    <text x="14" y="216" class="r">WHERE THAT NUMBER COMES FROM</text>
+    <rect x="10" y="222" width="250" height="46" rx="4" fill="#f3f2ee"/>
+    <text x="18" y="241" class="m">boreal only: 2,072,200 / 23</text>
+    <text x="18" y="258" class="m">           = 90,095.65</text>
 
-    <text x="14" y="298" class="r">LEAD · FINAL ANSWER</text>
-    <rect x="10" y="304" width="250" height="28" rx="4" fill="#fdefe8" stroke="#d64545"/>
-    <text x="18" y="322" class="m" fill="#d64545">"90095.65"  ✗  (off by $4,990)</text>
-
-    <line x1="14" y1="352" x2="256" y2="352" stroke="#e5e5e5"/>
-    <text x="14" y="374" class="s"><tspan font-weight="bold" fill="#1a1a1a">Why it failed:</tspan> a global mean needs</text>
-    <text x="14" y="390" class="s">per-site sums and counts, not per-site</text>
-    <text x="14" y="406" class="s">averages. Workers also skipped deduplication</text>
-    <text x="14" y="422" class="s">or ran out of turns on follow-ups.</text>
-    <text x="14" y="446" class="m">reward = 0.0</text>
+    <text x="14" y="290" class="s">cobalt's 20 employees never reach the</text>
+    <text x="14" y="306" class="s">answer, so the team is off by $4,991.</text>
+    <text x="14" y="332" class="m">reward = 0.0</text>
   </g>
 
   <!-- ===== Column 2: Trained org (right) ===== -->
-  <g transform="translate(305,78)">
-    <rect width="270" height="466" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="2"/>
+  <g transform="translate(305,86)">
+    <rect width="270" height="346" rx="6" fill="#fdfdfd" stroke="#2a78d6" stroke-width="2"/>
     <text x="14" y="25" class="h">Trained org (step 30, all roles)</text>
-    <text x="14" y="43" class="s">asks for sums &amp; counts → exact</text>
+    <text x="14" y="43" class="s">no exhausted workers → correct</text>
 
-    <text x="14" y="68" class="r">LEAD · PARALLEL ASK</text>
-    <rect x="10" y="74" width="250" height="42" rx="4" fill="#eaf2fc" stroke="#2a78d6"/>
-    <text x="18" y="90" class="m">ask("atlas", "dedup, sum &amp; count")</text>
-    <text x="18" y="106" class="m">ask("boreal", "dedup, sum &amp; count")</text>
+    <text x="14" y="68" class="r">ROLLOUT</text>
+    <rect x="10" y="74" width="250" height="64" rx="4" fill="#f3f2ee"/>
+    <text x="18" y="93" class="m">lead turns       4 / 6</text>
+    <text x="18" y="111" class="m">workers at cap   0 requests</text>
+    <text x="18" y="129" class="m">critical path    20 calls</text>
 
-    <text x="14" y="134" class="r">WORKERS · 1 PYTHON CALL EACH</text>
-    <rect x="10" y="140" width="250" height="52" rx="4" fill="#f3f2ee"/>
-    <text x="18" y="157" class="m">atlas:  sum=1,191,203  count=14</text>
-    <text x="18" y="173" class="m">boreal: sum=1,021,543  count=12</text>
-    <text x="18" y="187" class="s">0 worker exhaustions, clean reply()</text>
+    <text x="14" y="160" class="r">FINAL ANSWER</text>
+    <rect x="10" y="166" width="250" height="28" rx="4" fill="#eaf2fc" stroke="#2a78d6"/>
+    <text x="18" y="184" class="m">submit("$85,105.62")  ✓</text>
 
-    <text x="14" y="216" class="r">LEAD · AGGREGATION</text>
-    <rect x="10" y="222" width="250" height="54" rx="4" fill="#f3f2ee"/>
-    <text x="18" y="239" class="m">total_sum = 2,212,746</text>
-    <text x="18" y="255" class="m">total_n   = 14 + 12 = 26</text>
-    <text x="18" y="270" class="m">2212746 / 26 = 85105.62</text>
+    <text x="14" y="216" class="r">GRADING</text>
+    <rect x="10" y="222" width="250" height="46" rx="4" fill="#f3f2ee"/>
+    <text x="18" y="241" class="m">|85,105.62 − 85,104.65| = 0.97</text>
+    <text x="18" y="258" class="m">within the 0.1% tolerance</text>
 
-    <text x="14" y="298" class="r">LEAD · SUBMIT</text>
-    <rect x="10" y="304" width="250" height="28" rx="4" fill="#eaf2fc" stroke="#2a78d6"/>
-    <text x="18" y="322" class="m">submit(answer="$85,105.62")  ✓</text>
-
-    <line x1="14" y1="352" x2="256" y2="352" stroke="#e5e5e5"/>
-    <text x="14" y="374" class="s"><tspan font-weight="bold" fill="#1a1a1a">What changed:</tspan> lead requests additive</text>
-    <text x="14" y="390" class="s">statistics; workers write one clean pandas</text>
-    <text x="14" y="406" class="s">script and call reply() before hitting the</text>
-    <text x="14" y="422" class="s">6-turn worker cap.</text>
-    <text x="14" y="446" class="m">reward = 1.0 + eff_bonus</text>
+    <text x="14" y="290" class="s">The critical path (20) is above 18, so</text>
+    <text x="14" y="306" class="s">the team earns no speed bonus.</text>
+    <text x="14" y="332" class="m">reward = 1.0</text>
   </g>
 
   <!-- ===== Column 3: Solo baseline ===== -->
-  <g transform="translate(590,78)">
-    <rect width="270" height="466" rx="6" fill="#fdfdfd" stroke="#1baf7a" stroke-width="2"/>
-    <text x="14" y="25" class="h">Solo baseline (zero-shot)</text>
-    <text x="14" y="43" class="s">never trained, shares worker tools</text>
+  <g transform="translate(590,86)">
+    <rect width="270" height="346" rx="6" fill="#fdfdfd" stroke="#1baf7a" stroke-width="2"/>
+    <text x="14" y="25" class="h">Solo (same weights, one agent)</text>
+    <text x="14" y="43" class="s">never trained as a solo agent</text>
 
-    <text x="14" y="68" class="r">SOLO · TOOL CALL 1</text>
-    <rect x="10" y="74" width="250" height="42" rx="4" fill="#e6f6f0" stroke="#1baf7a"/>
-    <text x="18" y="90" class="m">list_files()</text>
-    <text x="18" y="106" class="s">sees atlas/ and boreal/ in one dir</text>
+    <text x="14" y="68" class="r">STEP 0 · BASE MODEL</text>
+    <rect x="10" y="74" width="250" height="64" rx="4" fill="#fdefe8" stroke="#d64545"/>
+    <text x="18" y="93" class="m" fill="#d64545">answer: 72,997.16  ✗</text>
+    <text x="18" y="111" class="s">= 20,585,200 / 282: the mean of every</text>
+    <text x="18" y="127" class="s">employee, with no Finance filter</text>
 
-    <text x="14" y="134" class="r">SOLO · TOOL CALL 2</text>
-    <rect x="10" y="140" width="250" height="52" rx="4" fill="#e6f6f0" stroke="#1baf7a"/>
-    <text x="18" y="157" class="m">run_python(code="</text>
-    <text x="18" y="173" class="m">  df = pd.concat([read('atlas'),</text>
-    <text x="18" y="187" class="m">                  read('boreal')])…")</text>
+    <text x="14" y="160" class="r">STEP 30 · AFTER ORG TRAINING</text>
+    <rect x="10" y="166" width="250" height="28" rx="4" fill="#e6f6f0" stroke="#1baf7a"/>
+    <text x="18" y="184" class="m">answer: 85104.65  ✓  (exact)</text>
 
-    <text x="14" y="216" class="r">SANDBOX OUTPUT</text>
-    <rect x="10" y="222" width="250" height="54" rx="4" fill="#f3f2ee"/>
-    <text x="18" y="239" class="m">exit code 0</text>
-    <text x="18" y="255" class="m">85105.62</text>
-    <text x="18" y="270" class="s">concatenates shards directly</text>
+    <text x="14" y="216" class="r">WHY IT TRANSFERS</text>
+    <rect x="10" y="222" width="250" height="46" rx="4" fill="#f3f2ee"/>
+    <text x="18" y="241" class="m">list_files · read_file</text>
+    <text x="18" y="258" class="m">run_python</text>
 
-    <text x="14" y="298" class="r">SOLO · FINAL ANSWER</text>
-    <rect x="10" y="304" width="250" height="28" rx="4" fill="#e6f6f0" stroke="#1baf7a"/>
-    <text x="18" y="322" class="m">final_answer("85105.62")  ✓</text>
-
-    <line x1="14" y1="352" x2="256" y2="352" stroke="#e5e5e5"/>
-    <text x="14" y="374" class="s"><tspan font-weight="bold" fill="#1a1a1a">Zero-shot transfer:</tspan> solo uses</text>
-    <text x="14" y="390" class="s"><tspan font-family="DejaVu Sans Mono, Menlo, monospace">list_files, read_file, run_python</tspan> —</text>
-    <text x="14" y="406" class="s">the exact same data tools that workers</text>
-    <text x="14" y="422" class="s">practice during multi-agent training.</text>
-    <text x="14" y="446" class="m">45.0% → 62.5% (+17.5 pts)</text>
+    <text x="14" y="290" class="s">The same data tools the workers practise</text>
+    <text x="14" y="306" class="s">inside the organisation.</text>
+    <text x="14" y="332" class="m">solo accuracy 45.0% → 62.5%</text>
   </g>
 </svg>

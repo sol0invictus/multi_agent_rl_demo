@@ -67,7 +67,9 @@ function rehypeAstroLike() {
 
 const html = String(await unified()
   .use(remarkParse).use(remarkGfm).use(remarkSmartypants).use(remarkMath)
-  .use(remarkRehype).use(rehypeKatex).use(rehypeAstroLike).use(rehypeStringify)
+  // allowDangerousHtml: pass inline HTML (e.g. <u>) through, as Astro does
+  .use(remarkRehype, { allowDangerousHtml: true }).use(rehypeKatex).use(rehypeAstroLike)
+  .use(rehypeStringify, { allowDangerousHtml: true })
   .process(body));
 
 const date = new Date(meta.date + 'T00:00:00Z');
