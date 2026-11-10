@@ -159,7 +159,7 @@ save(fig, "fig_hero_punchline.png")
 
 
 # ------------------------------------------------------------- fig 1: held-out accuracy over training
-fig, axes = plt.subplots(1, 3, figsize=(13.2, 3.5), gridspec_kw={"width_ratios": [1.1, 1.1, 1.35]})
+fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.5))
 
 ax = axes[0]
 ys_all_org = [eval_all[s]["org"]["acc"] for s in STEPS_ALL]
@@ -197,38 +197,6 @@ ax.set_xlabel("training step (trained on org only)")
 ax.set_xlim(-2, 37)
 pct_axis(ax, 0.05, 0.72)
 ax.legend(loc="lower right", fontsize=8.8)
-
-ax = axes[2]
-cats = ["seen", "tmpl", "domain", "wide\n(K=4)", "org\nall", "solo\nall", "both\n(n=80)"]
-v_base = [
-    eval_all[S0]["org"]["acc_seen"], eval_all[S0]["org"]["acc_tmpl"],
-    eval_all[S0]["org"]["acc_domain"], eval_all[S0]["org"]["acc_wide"],
-    eval_all[S0]["org"]["acc"], eval_all[S0]["solo"]["acc"],
-    0.5 * (eval_all[S0]["org"]["acc"] + eval_all[S0]["solo"]["acc"]),
-]
-v_lead = [
-    eval_lead[SF]["org"]["acc_seen"], eval_lead[SF]["org"]["acc_tmpl"],
-    eval_lead[SF]["org"]["acc_domain"], eval_lead[SF]["org"]["acc_wide"],
-    eval_lead[SF]["org"]["acc"], eval_lead[SF]["solo"]["acc"],
-    0.5 * (eval_lead[SF]["org"]["acc"] + eval_lead[SF]["solo"]["acc"]),
-]
-v_all = [
-    eval_all[SF]["org"]["acc_seen"], eval_all[SF]["org"]["acc_tmpl"],
-    eval_all[SF]["org"]["acc_domain"], eval_all[SF]["org"]["acc_wide"],
-    eval_all[SF]["org"]["acc"], eval_all[SF]["solo"]["acc"],
-    0.5 * (eval_all[SF]["org"]["acc"] + eval_all[SF]["solo"]["acc"]),
-]
-x = np.arange(len(cats))
-w = 0.26
-ax.bar(x - w, v_base, width=w, color=BASE, label=f"base (step {S0})")
-ax.bar(x, v_lead, width=w, color=COLOR["lead"], label=f"lead only (step {SF})")
-ax.bar(x + w, v_all, width=w, color=COLOR["all"], label=f"all roles (step {SF})")
-ax.axvline(3.5, color=MUTED, ls=":", lw=1.0)
-ax.set_title(f"Step {SF} by split & mode")
-ax.set_xticks(x)
-ax.set_xticklabels(cats, fontsize=8.8)
-pct_axis(ax, 0.0, 0.72)
-ax.legend(loc="upper left", fontsize=8.3)
 
 fig.subplots_adjust(wspace=0.26)
 save(fig, "fig_eval_curves.png")

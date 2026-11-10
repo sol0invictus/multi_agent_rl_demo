@@ -16,7 +16,7 @@ Yes, **if you train the workers too:**
 
 ![Progress and punchline of the experiment](./multi-agent-rl/fig_hero_punchline.png)
 
-If you already know how multi-agent RL and GRPO work, skip to [C. The experiment](#c-the-experiment) or [E. Implementation details](#e-implementation-details-capture-proxy-lfm2-and-single-gpu-tricks).
+If you already know how multi-agent RL and GRPO work, skip to [C. The experiment](#c-the-experiment) or the [implementation appendix (G)](#g-appendix-implementation-details-capture-proxy-lfm2-single-gpu-tricks).
 
 ## A. What is multi-agent RL?
 
@@ -195,7 +195,7 @@ $$
 
 - **$A_g$ sits outside the agent sum**, so the lead and every worker on team $g$ share it. This is the whole of RLCR.
 - **$m_{a,t} \in \{0, 1\}$** masks in only the tokens agent $a$ sampled itself, not prompts, tool outputs, or messages from other agents.
-- **$w_{a,t} = \min\big(\pi_\theta / \mu,\ 2\big)$** corrects for small numerical differences between vLLM ($\mu$), which sampled the tokens, and the trainer. It stays close to 1 (see [E.5](#e5-training-health-and-vllm-to-trainer-kl-verification)).
+- **$w_{a,t} = \min\big(\pi_\theta / \mu,\ 2\big)$** corrects for small numerical differences between vLLM ($\mu$), which sampled the tokens, and the trainer. It stays close to 1 (see [G.5](#g5-training-health-and-vllm-to-trainer-kl-verification)).
 - **$N$** is the number of trained tokens in the batch.
 
 The role set $R$ is the knob this post turns. $R = \{\text{lead}, \text{worker}\}$ is full RLCR, as in Avalon-M1. $R = \{\text{lead}\}$ trains only the orchestrator, in the style of Kimi's PARL: workers still run on the live shared weights, but their tokens are dropped from the loss. Same rollouts, same rewards, same advantages; only the tokens the gradient sees differ.
@@ -248,116 +248,71 @@ The test set (`make_org_test(10)`) has 40 tasks, split into four buckets of 10 t
 
 ## D. Results
 
-### D.1 Accuracy over training: all roles vs. lead only
+The numbers behind every chart in this section are in [Appendix I](#i-appendix-full-result-tables).
+
+### D.1 Training the whole team works; training only the lead doesn't
 
 ![Held-out accuracy over training](./multi-agent-rl/fig_eval_curves.png)
 
-| Run | Step | `org` all ($n=40$) | `org` seen | `org` tmpl | `org` domain | `org` wide ($K=4$) | `solo` all ($n=40$) | `solo` seen | `solo` tmpl | `solo` domain | `solo` wide | Combined ($n=80$) |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **All roles (`org_small`)** | 0 | 22.5% | 20% | 40% | 20% | 10% | 45.0% | 50% | 40% | 40% | 50% | 33.8% |
-| **All roles (`org_small`)** | 5 | 25.0% | 30% | 20% | 50% | 0% | 40.0% | 50% | 60% | 20% | 30% | 32.5% |
-| **All roles (`org_small`)** | 10 | 30.0% | 20% | 40% | 50% | 10% | 45.0% | 60% | 50% | 40% | 30% | 37.5% |
-| **All roles (`org_small`)** | 20 | **37.5%** | 40% | **60%** | 40% | 10% | 42.5% | 20% | 40% | 50% | 60% | 40.0% |
-| **All roles (`org_small`)** | **30** | **37.5%** | 30% | **60%** | **40%** | **20%** | **62.5%** | **70%** | **70%** | **70%** | 40% | **50.0%** |
-| | | | | | | | | | | | | |
-| **Lead only (`org_small_lead`)** | 0 | 30.0% | 30% | 50% | 20% | 20% | 42.5% | 30% | 30% | 40% | 70% | 36.2% |
-| **Lead only (`org_small_lead`)** | 10 | 12.5% | 0% | 20% | 20% | 10% | 37.5% | 0% | 70% | 30% | 50% | 25.0% |
-| **Lead only (`org_small_lead`)** | 20 | 27.5% | 20% | 30% | 50% | 10% | 42.5% | 60% | 50% | 20% | 40% | 35.0% |
-| **Lead only (`org_small_lead`)** | **30** | **27.5%** | 40% | 40% | 30% | **0%** | **50.0%** | 50% | 30% | 70% | 50% | **38.8%** |
+When every role is trained, the team gets steadily better. Multi-agent accuracy on held-out tasks climbs from 22.5% to 37.5% over 30 steps. The gains aren't limited to familiar questions: they show up on question types the model never trained on, on an entirely new data domain, and on 4-site teams, which are bigger than anything it saw in training.
 
-*(Note on step 0: both runs start from the exact same base `LFM2.5-2.6B` weights, but evaluation samples at temperature `0.7`, so the two independent step-0 evaluations differ by a few tasks—9/40 vs 12/40 on `org`, 18/40 vs 17/40 on `solo`.)*
+Training only the lead goes nowhere. Accuracy dips mid-run, recovers, and ends about where it started (30% → 27.5%), and the lead-only team fails every 4-site task.
 
-Here is the paired task-by-task comparison (exact two-sided McNemar sign test):
+The surprise is on the right. Neither run ever trained the model to work alone, yet the solo agent improves from 45% to 62.5% when the workers were trained, compared with 50% when only the lead was. With 40 tasks per mode these numbers are noisy, but pooling both modes, the whole-team gain is statistically significant ($p = 0.024$) and the lead-only change is not.
 
-| Comparison | Mode | Before / Run A | After / Run B | Fixed / Won | Broken / Lost | $p$ |
-|---|---|---|---|---|---|---|
-| **All roles (`org_small`): step 0 → 30** | `org` ($n=40$) | 22.5% (`9/40`) | **37.5% (`15/40`)** | 8 | 2 | 0.109 |
-| **All roles (`org_small`): step 0 → 30** | `solo` ($n=40$) | 45.0% (`18/40`) | **62.5% (`25/40`)** | 13 | 6 | 0.167 |
-| **All roles (`org_small`): step 0 → 30** | **both ($n=80$)** | **33.8% (`27/80`)** | **50.0% (`40/80`)** | **21** | **8** | **0.024** |
-| **Lead only (`org_small_lead`): step 0 → 30** | `org` ($n=40$) | 30.0% (`12/40`) | 27.5% (`11/40`) | 4 | 5 | 1.000 |
-| **Lead only (`org_small_lead`): step 0 → 30** | `solo` ($n=40$) | 42.5% (`17/40`) | 50.0% (`20/40`) | 12 | 9 | 0.664 |
-| **Lead only (`org_small_lead`): step 0 → 30** | **both ($n=80$)** | 36.2% (`29/80`) | 38.8% (`31/80`) | 16 | 14 | 0.856 |
-| **Step 30 head-to-head: `all` vs `lead`** | `org` ($n=40$) | 27.5% (`lead`) | **37.5% (`all`)** | 7 | 3 | 0.344 |
-| **Step 30 head-to-head: `all` vs `lead`** | `solo` ($n=40$) | 50.0% (`lead`) | **62.5% (`all`)** | 10 | 5 | 0.302 |
-| **Step 30 head-to-head: `all` vs `lead`** | **both ($n=80$)** | 38.8% (`lead`) | **50.0% (`all`)** | **17** | **8** | 0.108 |
+*(Both runs start from the same weights. Their step-0 scores differ slightly only because evaluation samples at temperature 0.7.)*
 
-Three things stand out right away:
+### D.2 Why: the workers were the bottleneck
 
-1. **Training all roles (`org_small`) improves both `org` and `solo`.** Multi-agent `org` accuracy rises monotonically at every checkpoint (`22.5% → 25.0% → 30.0% → 37.5%`), fixing 8 test tasks and breaking only 2. Held-out templates (`tmpl`) go from `40%` to `60%`, the unseen `web` domain doubles from `20%` to `40%`, and 4-site `wide` tasks double from `10%` to `20%`.
-2. **Training only the lead (`org_small_lead`) stalls completely on `org`.** At step 10, `org` accuracy actually drops to `12.5%` (as site coverage falls to `0.78` and 9 rollouts time out), before recovering to `27.5%` at steps 20 and 30—1 task below where it started (`4` fixed, `5` broken). On 4-site `wide` tasks, it scores **0/10**.
-3. **Zero-shot `solo` transfer is much stronger when workers are trained (`62.5%` vs `50.0%`).** Neither run ever trained on `solo`. Why did training multi-agent workers make the model so much better at working alone?
-
-### D.2 Why training only the lead failed: the workers are half the bottleneck
-
-In frontier-model papers like Kimi PARL, freezing sub-agents and training only the orchestrator works because a 100B+ base model already knows how to run a Python snippet without shooting itself in the foot. A 2.6B model does not.
-
-Look at what happens inside the workers over training (`summarize` in `rollout.py`):
+Papers that train only the orchestrator, like Kimi's PARL, work with frontier-scale models whose sub-agents already know how to run a Python snippet without tripping over themselves. A 2.6B model doesn't, and that changes everything.
 
 ![What changed inside the organisation](./multi-agent-rl/fig_coordination.png)
 
-| Coordination metric (`org` eval, $n=40$) | Base model (step 0) | Train lead only (step 30) | Train all roles (step 30) | Change in `all` (0 → 30) |
-|---|---|---|---|---|
-| **Critical-path latency (model calls)** | 18.3 | 16.8 | **14.1** | **−22.8%** |
-| **Exhausted workers per task (hit 6-turn cap)** | 1.18 | 1.10 | **0.53** | **−55.3%** |
-| **Worker model calls per task (sum across sites)** | 19.8 | 18.4 | **14.4** | **−27.3%** |
-| **Worker sandbox tool calls per task** | 18.9 | 17.4 | **12.8** | **−32.5%** |
-| **Worker plain-text reply fallbacks per task** | 3.20 | 2.88 | **2.35** | **−26.6%** |
-| **Worker generated tokens per task** | 9,320 | 9,103 | **7,224** | **−22.5%** |
-| **Lead generated tokens per task** | 2,829 | 2,121 | **2,374** | **−16.1%** |
-| **Org episodes hitting `max_turns` (out of 40)** | 6 | 5 | **1** | **−83.3%** |
-| **Solo episodes hitting `max_turns` (out of 40)** | 9 | 10 | **3** | **−66.7%** |
-| **Eval wall-clock time (80 rollouts)** | 469 s | 434 s | **332 s** | **−29.2%** |
+![Coordination metrics at step 30 relative to the base model](./multi-agent-rl/fig_inside_team.png)
 
-That table is the whole story of the ablation:
+The charts tell a simple story. With lead-only training, the workers behave almost exactly like the base model: they still run out of turns about once per task, make nearly as many tool calls, and write nearly as many tokens. The lead may learn to ask better questions, but the answers coming back are no better, so the team as a whole doesn't improve.
 
-- **When workers are not trained (`org_small_lead`), worker behavior barely moves.** At step 0, an average organisation rollout had `1.18` workers hit their 6-turn limit without calling `reply()`, made `18.9` sandbox tool calls, and wrote `9,320` worker tokens. After 30 steps of lead-only training, workers still hit their turn limit **`1.10` times per task**, make **`17.4` tool calls**, and write **`9,103` tokens**. On tasks like `o19900001` (`avg_salary_dept`) and `o20000001` (`n_city`), the lead in `org_small_lead` asks sensible questions, but 3 worker calls exhaust their 6-turn cap trying to join the tables, and the whole organisation times out at `latency = 30–34`.
-- **When all roles are trained (`org_small`), workers learn to write one clean script and reply.** Worker turn exhaustion drops by more than half (`1.18 → 0.53`), worker tool calls drop by a third (`18.9 → 12.8`), and organisation `max_turns` timeouts drop from `6/40` to **`1/40`**.
-- **This also explains the zero-shot `solo` jump (`45.0% → 62.5%`).** Look at the tool schemas in `agents.py`:
-  - `lead` only ever sees `ask(site, request)` and `submit(answer)`.
-  - `worker` uses `list_files`, `read_file`, `run_python`, and `reply(message)`.
-  - `solo` uses `list_files`, `read_file`, `run_python`, and `final_answer(answer)`.
+Train every role and the workers change. They stop flailing, inspect the file, write one working script, and reply. They run out of turns half as often, the team finishes with about a quarter fewer calls on its critical path, and only 1 of 40 episodes times out, down from 6.
 
-  When only the lead is trained, the model **never gets a single gradient update on `run_python` or `read_file`**. So when `org_small_lead` is tested in `solo` mode, it still hits the 10-turn limit on `10/40` tasks (and on `o20000005` it prints a raw `<|tool_call_start|>[run_python(...)]` string as its final text). When all roles are trained, every successful worker trajectory trains the exact data-inspection and pandas skills that `solo` needs, cutting `solo` turn-limit failures from `9/40` to `3/40`.
+That also explains the solo result. A solo agent uses exactly the same tools as a worker (list the files, read one, run Python), so practising as a worker is practising for solo work. Train only the lead and those skills never get a single update. Solo timeouts confirm it: they fall from 9 to 3 when workers are trained and stay put (9 to 10) when they aren't.
 
-### D.3 Which tasks improved?
+### D.3 Where it helped, and why 4-site teams are the hardest test
 
 ![Accuracy by site count, difficulty, and data mess](./multi-agent-rl/fig_breakdown.png)
 
-| Slice | $n$ | Base (step 0) | Lead only (step 30) | All roles (step 30) |
-|---|---|---|---|---|
-| **Org by site count**: $K=2$ / $K=3$ / $K=4$ (`wide`) | 12 / 18 / 10 | 17% / 33% / 10% | 42% / 33% / **0%** | **42% / 44% / 20%** |
-| **Solo by site count**: $K=2$ / $K=3$ / $K=4$ (`wide`) | 12 / 18 / 10 | 25% / 56% / 50% | 50% / 50% / 50% | **75% / 67% / 40%** |
-| **Difficulty (`org + solo`)**: easy / medium / hard | 20 / 32 / 28 | 50% / 34% / 21% | 45% / 44% / 29% | **70% / 59% / 25%** |
-| **Messy files (`org + solo`)**: clean / 1 mess / 2 messes | 38 / 26 / 16 | 45% / 27% / 19% | 50% / 31% / 25% | **61% / 54% / 19%** |
-| **Specific mess kinds**: `dup` / `case` / `dates` | 16 / 16 / 6 | 19% / 25% / 0% | 38% / 12% / 17% | **31% / 44% / 33%** |
+Most of the improvement comes from easy and medium tasks and from files with at most one kind of mess. The hardest tasks, and files with two kinds of corruption stacked together, stay stuck below 30% for both runs. Thirty steps wasn't enough to crack those.
 
-**Why $K=4$ (`wide`) is the sharpest test of worker reliability.** If a single worker has a 25% chance of botching its script or phrasing its reply badly, a 2-site organisation has a $(0.75)^2 = 56\%$ chance that both workers behave cleanly, whereas a 4-site organisation has only a $(0.75)^4 = 32\%$ chance.
+The clearest split is on 4-site teams: training every role doubles their accuracy (10% → 20%), while lead-only training drops it to zero. That's no coincidence, because bigger teams punish unreliable workers. If each worker has a 75% chance of doing its part cleanly, a 2-site team gets clean inputs $0.75^2 = 56\%$ of the time, but a 4-site team only $0.75^4 = 32\%$ of the time.
 
-Task `o20200003` (`wide/hr/n_hired_after`, $K=4$: *"How many employees were hired after 2013?"*, gold `156`) shows this failure mode directly. In `org_small` (all roles trained), the lead fans out to all 4 sites in turn 1, the 4 workers return `28`, `32`, `19`, and `77`, and the lead sums them (`156`) in 9 critical-path calls.
+One 4-site question shows what that looks like in practice: *"How many employees were hired after 2013?"* (the answer is 156). The team trained on every role asks all four sites at once, gets back 28, 32, 19, and 77, adds them up, and is done.
 
-In `org_small_lead` (lead only trained), the untrained `fjord` worker replies:
+The lead-only team gets the very same four numbers, and all four are correct. But the workers describe their local counts as totals "across all sites", and one worker backs its 77 with a year-by-year breakdown that only adds up to 53. The lead can't see the files, so it has no way to tell which reply to trust. It spends thousands of tokens going back and forth on whether the sites somehow share data, mis-adds the four numbers to 154, and never commits to an answer.
 
-```text
-The count of employees hired after 2013 across all sites (atlas, boreal, delta, fjord) is **77**.
-Breakdown by hire year: 2018: 13, 2017: 7, 2020: 6, 2021: 4, 2022: 8, 2023: 9, 2024: 6.
-```
+The lead had every number it needed. What it lacked were workers that report clearly, and that's exactly what lead-only training can't teach.
 
-Two things are wrong with that worker reply: `fjord` falsely claims its local count of `77` is *"across all sites (atlas, boreal, delta, fjord)"*, and its year breakdown only sums to `53` (it omitted 2014–2016). Because the lead cannot see the files, that one sloppy worker reply sends the trained lead into a 2,000-token crisis trying to figure out whether the sites actually share data:
+## E. What I'd take away
 
-```text
-The atlas site explicitly says the total across all sites is 28. The boreal site says 32,
-delta 19, fjord 77. For fjord, the breakdown sums to 53 but the total is 77, so there's a
-discrepancy... Since the atlas site's response was the first and consistent with its own
-breakdown, I will go with 28.
-```
+**Shared rewards are enough.** Give every agent on a team the same pass/fail score, compare teams that attempted the same question, and a 2.6B model learns to work as a team in 30 steps on a single GPU. Multi-agent accuracy went from 22.5% to 37.5%, the team got about a quarter faster, and workers ran out of turns half as often. No judge and no per-agent credit were needed.
 
-No amount of lead-only RL can fix a worker that lies about what is in its file.
+**On a small model, you have to train the workers too.** Training only the lead is tempting, since its backward pass is three times faster, but here it didn't improve anything. A lead is only as good as the answers it gets back, and a small model's workers aren't reliable without practice. The bigger the team, the worse that gets: lead-only training scored zero on 4-site tasks.
 
-## E. Implementation details: capture proxy, LFM2, and single-GPU tricks
+**One set of weights really does act like a gene pool.** Skills the model picks up while playing a worker carry over when it works alone, with no solo training at all (45% → 62.5%). That transfer only shows up when the workers are trained.
+
+**Measure speed the way a team experiences it.** Counting model calls along the critical path, instead of all calls, rewards the lead for asking in parallel and the workers for finishing quickly, without punishing a team for having more agents.
+
+**Watch how episodes end.** Most of the time the lead answered in plain text instead of formally submitting. That's fine when it's done, but it occasionally cut the lead off mid-thought. A one-turn nudge would fix that.
+
+**How much to trust this.** It's a small experiment. Each mode has 40 test tasks, so one task moves a test bucket by 10 points, and only the pooled 80-task comparison for whole-team training is clearly significant ($p = 0.024$). There is one run per setting, with no repeated seeds. Each run is 30 steps, about three and a half hours, and the whole-team run was still improving at the end, so these numbers are probably not where it would level off. Finally, a logging bug crashed the main run just after its final weights were saved; the final evaluation used those saved weights, so it doesn't affect the results.
+
+## F. Code
+
+Everything is on GitHub at [sol0invictus/multi_agent_rl_demo](https://github.com/sol0invictus/multi_agent_rl_demo): the sharded task generator, the lead/worker/solo harnesses, the RLCR trainer (GRPO + LoRA on one GPU), the logs from both runs, and the scripts that rebuild every figure in this post. The README walks through the design, and `make test` runs an end-to-end check without a GPU.
+
+## G. Appendix: Implementation details (capture proxy, LFM2, single-GPU tricks)
 
 Running multi-agent RL with 24 concurrent organisations (72–96 agents per step) plus a live vLLM server and a PyTorch trainer on a single 24 GB GPU requires several systems choices that sit underneath the RL loop.
 
-### E.1 The token-capturing proxy (`proxy.py`) and append-only stitching (`rollout.py`)
+### G.1 The token-capturing proxy (`proxy.py`) and append-only stitching (`rollout.py`)
 
 The agent harnesses in `agents.py` never touch PyTorch or tokenizers. Each agent in rollout `rid` is handed its own OpenAI-compatible URL—`http://127.0.0.1:8100/r/<rid>-lead/v1`, `/r/<rid>-atlas/v1`, `/r/<rid>-boreal/v1`—pointing at `CaptureProxy` (`proxy.py`):
 
@@ -375,17 +330,17 @@ $$
 \mathcal{L}(\theta) \;=\; -\frac{1}{N}\sum_{a \in \text{roles}} \sum_{t:\, m_{a,t}=1} \min\!\Big(\frac{\pi_\theta(y_{a,t})}{\mu(y_{a,t})},\, 2\Big)\, A_g \,\log \pi_\theta(y_{a,t})
 $$
 
-### E.2 Three LFM2 and vLLM quirks on one GPU
+### G.2 Three LFM2 and vLLM quirks on one GPU
 
 1. **Merged-weight sync.** Normally you would keep the base model in vLLM and hot-swap the 80 MB LoRA adapter each step (`Appendix`). On this machine, vLLM's LoRA decode path for `LFM2.5-2.6B` is about **15× slower** than base-model decode. So after every gradient step, `publish_merged` folds the LoRA update $\frac{\alpha}{r}BA$ into the base weights in memory, writes `policy/model.safetensors`, and hits vLLM's `/collective_rpc` (`reload_weights`) plus `/reset_prefix_cache`. Reloading the 5 GB file takes ~2 seconds and keeps generation at full speed.
 2. **No sequence packing across agents.** `LFM2.5-2.6B` is a hybrid architecture that interleaves gated short-convolution (`Lfm2ShortConv`) layers with SDPA attention layers. If you pack two different agents' rows into a single 1D sequence to save padding, the short-conv kernel leaks state across the boundary between agent 1 and agent 2. Every agent row is therefore forwarded as its own clean sequence with activation checkpointing.
 3. **Tandem-repeat masking (`tandem_repeat`).** In a multi-agent rollout, one worker can occasionally get stuck repeating a short phrase until it hits `max_tokens`, while the rest of the organisation still manages to guess or compute the right answer. Without protection, a positive collective advantage $A_g > 0$ would reinforce the degenerate loop. `to_rows` detects any call ending in $\ge 300$ tokens of a repeating $1\text{–}32$ token period and zeros out its loss mask.
 
-### E.3 Isolated per-site Docker sandboxes (`sandbox.py`)
+### G.3 Isolated per-site Docker sandboxes (`sandbox.py`)
 
 For each organisation rollout, `sandbox.py` creates one host workspace with a subdirectory per site (`atlas/`, `boreal/`, …) and runs a single network-disabled Docker container (`harness-sandbox:latest`, `--network none`, `--memory 512m`, `--cpus 1`) with `Workspace.sub(site)` chdir'd into each worker's directory. Up to 16 containers run concurrently (`SANDBOX_CONCURRENCY = 16`), so parallel `ask` calls execute `python3 _script.py` simultaneously without seeing sibling sites' files.
 
-### E.4 Episode termination and the `final_text` shortcut (`agents.py`)
+### G.4 Episode termination and the `final_text` shortcut (`agents.py`)
 
 Look back at the left panel of the coordination figure (*"How org episodes end"*). At step 30 of `org_small`, only **18%** (`7/40`) of episodes end with the lead calling `submit(answer)`. Another **80%** (`32/40`) end with `status = "final_text"`, meaning the lead wrote a plain-text message with no tool call.
 
@@ -398,7 +353,7 @@ if not m.tool_calls:
 
 Because `tasks.grade` extracts the last number from a plain-text response, stating *"Therefore, the total is **156**"* in plain text earns the **exact same reward** as calling `submit(answer="156")`—and saves one tool-call token sequence. On two test tasks (`o19900003` in `org_small` and `o20200002` in `org_small_lead`), however, the lead writes an intermediate plain-text summary (*"Now I have the data from all sites, let me compile the monthly counts…"*), expecting to call `submit` on the next turn—and the harness cuts the episode off mid-thought. Giving the lead a one-turn nudge when it writes plain text before `LEAD_MAX_TURNS` is an easy fix for the next run.
 
-### E.5 Training health and vLLM-to-trainer KL verification
+### G.5 Training health and vLLM-to-trainer KL verification
 
 ![Training curves](./multi-agent-rl/fig_training.png)
 
@@ -418,47 +373,7 @@ Notice two differences between the two training curves:
 1. **Flat groups drop in `org_small`, but climb in `org_small_lead` mid-run.** In steps 11–25 of `org_small_lead`, more than half of all task groups (`2.0–2.6` out of `4`) had zero reward variance because all 6 organisations failed the task (`flat = 4/4` on steps 11, 16, and 22).
 2. **Role drift on shared weights.** Because `lead` and `worker` share the same LoRA parameters, updating only on `lead` rows pushes the shared weights toward orchestrator patterns (`ask`/`submit`) without anchoring worker behavior. At step 29 of `org_small_lead`, 12 of the 24 rollouts threw errors and site coverage dipped to `0.50`. Training all roles together keeps the shared policy balanced across every role it has to play.
 
-## F. What I'd take away
-
-1. **Collective rewards (RLCR) work on a 2.6B model without per-agent credit assignment.** Giving every agent in an organisation the same scalar outcome reward took multi-agent accuracy from **22.5% to 37.5%**, cut critical-path latency by **23%**, and cut worker turn exhaustion by **55%** in 30 steps on one GPU.
-2. **On a small shared model, you cannot just train the lead and freeze the workers.** In `org_small_lead`, worker turn exhaustion stayed stuck at `1.10` per task, sloppy worker replies derailed the lead on 4-site tasks (`0%` on `wide`), and multi-agent accuracy failed to improve (`30.0% → 27.5%`).
-3. **Shared weights really do act like a gene pool.** Training *only* on multi-agent organisations boosted single-agent `solo` accuracy from **45.0% to 62.5%** zero-shot—and that transfer came specifically from training the workers (`62.5%` in `all` vs `50.0%` in `lead`), because workers and `solo` share the same data tools (`list_files`, `read_file`, `run_python`).
-4. **Critical-path latency is the right efficiency bonus for parallel agents.** Counting parallel worker calls by the slowest branch ($\max_i L_i$) rewards the lead for fanning out in parallel and rewards workers for finishing in fewer turns.
-5. **Watch how episodes end.** Because `org_harness` accepts a plain-text lead reply as a final answer, 80% of episodes end without calling `submit()`, which occasionally cuts the lead off when it summarizes intermediate results out loud.
-
-## G. Caveats
-
-- **Small evaluation size (40 tasks per mode, 10 per bucket).** Each bucket has 10 tasks, so a 10% swing in a single bucket is 1 task. That is why the main significance claim combines all 80 paired test evaluations (`org + solo`: `27/80 → 40/80`, 21 fixed vs 8 broken, $p = 0.024$). Running 30 tasks per bucket (120 tasks per mode) would tighten the per-bucket error bars.
-- **30 training steps (120 tasks, 720 organisation rollouts).** This is a small budget (~3.5 hours per run). In `org_small`, batch accuracy was still rising in steps 26–29 (`35.4%`, with flat groups down to `0.75/4`).
-- **One small bug at step 30 of `org_small`.** Before I added `"n_sites": task.n_sites` to `run_rollout`'s exception fallback in `rollout.py`, a single errored rollout at step 30 caused the step-30 training metric log line to raise a `KeyError` *after* the step-30 weights had already been saved and pushed to vLLM. Step 30's evaluation was then run against those step-30 weights. The fix is in `rollout.py` and `org_small_lead` ran all 30 steps cleanly.
-
-## H. Reproducing
-
-The code is in the `multi_agent_rl` repository: `org_tasks.py` (sharded CSV task generator), `agents.py` (`org_harness` and `solo_harness`), `rollout.py` (critical-path reward, row building, tandem-repeat masking, `collective_samples`), `proxy.py` (token-capturing proxy), `sandbox.py` (Docker), and `train.py` (GRPO + LoRA trainer). Both runs above can be reproduced with:
-
-```bash
-# 1. No-GPU checks: shard reassembly + end-to-end offline smoke test
-make test
-
-# 2. Start vLLM policy server on :8000 (~45% of one RTX 3090 Ti)
-./serve_vllm.sh > runs/vllm.log 2>&1 &
-
-# 3. Main run: train all roles (lead + workers) with collective rewards
-python -u train.py \
-    --run org_small --train-roles all --steps 30 --tasks-per-step 4 --group 6 --n-test 10 --eval-every 10
-
-# 4. Restart vLLM on fresh base weights and run the lead-only ablation
-./scripts/stop_vllm.sh && ./serve_vllm.sh > runs/vllm.log 2>&1 &
-python -u train.py \
-    --run org_small_lead --train-roles lead --steps 30 --tasks-per-step 4 --group 6 --n-test 10 --eval-every 10
-
-# 5. Summary tables, paired McNemar test, and blog figures
-python analysis/summarize_run.py org_small --compare org_small_lead
-python analysis/make_blog_figures.py --out blog/multi-agent-rl
-NODE_PATH=/home/webpage/node_modules node blog/build.mjs
-```
-
-## I. Appendix: LoRA parameterization and memory budget on one 24 GB GPU
+## H. Appendix: LoRA parameterization and memory budget on one 24 GB GPU
 
 In a single-agent run, one rollout is one conversation. In a multi-agent run, one rollout with $K=3$ sites is **four** separate multi-turn conversations (1 lead + 3 workers), totaling ~10,000–12,000 tokens per rollout, or ~250,000 tokens across a batch of 24 organisations. Meanwhile, the vLLM inference server is already sitting on 45% (~10.8 GB) of the RTX 3090 Ti's 24 GB of VRAM.
 
@@ -469,3 +384,59 @@ W \;=\; W_0 + \frac{\alpha}{r}\, B A, \qquad A \in \mathbb{R}^{r \times d_{\text
 $$
 
 Here $r = 32$ and $\alpha = 32$ ($\alpha/r = 1$), with $A$ initialized from $\mathcal{N}(0, 0.02^2)$ and $B = 0$ so training begins from the exact base policy. Adapters are attached across all seven attention and SwiGLU MLP projections in every layer (`q_proj`, `k_proj`, `v_proj`, `out_proj`, `w1`, `w2`, `w3`). That comes to **40,271,872 trainable parameters**—just **1.47%** of the 2.74B total—so the frozen base model, LoRA gradients, AdamW state, and activation-checkpointed backward pass fit comfortably alongside vLLM in **~10.6 GB** of peak trainer VRAM.
+
+## I. Appendix: Full result tables
+
+### I.1 Held-out accuracy by step and test bucket
+
+| Run | Step | `org` all ($n=40$) | `org` seen | `org` tmpl | `org` domain | `org` wide ($K=4$) | `solo` all ($n=40$) | `solo` seen | `solo` tmpl | `solo` domain | `solo` wide | Combined ($n=80$) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **All roles (`org_small`)** | 0 | 22.5% | 20% | 40% | 20% | 10% | 45.0% | 50% | 40% | 40% | 50% | 33.8% |
+| **All roles (`org_small`)** | 5 | 25.0% | 30% | 20% | 50% | 0% | 40.0% | 50% | 60% | 20% | 30% | 32.5% |
+| **All roles (`org_small`)** | 10 | 30.0% | 20% | 40% | 50% | 10% | 45.0% | 60% | 50% | 40% | 30% | 37.5% |
+| **All roles (`org_small`)** | 20 | **37.5%** | 40% | **60%** | 40% | 10% | 42.5% | 20% | 40% | 50% | 60% | 40.0% |
+| **All roles (`org_small`)** | **30** | **37.5%** | 30% | **60%** | **40%** | **20%** | **62.5%** | **70%** | **70%** | **70%** | 40% | **50.0%** |
+| | | | | | | | | | | | | |
+| **Lead only (`org_small_lead`)** | 0 | 30.0% | 30% | 50% | 20% | 20% | 42.5% | 30% | 30% | 40% | 70% | 36.2% |
+| **Lead only (`org_small_lead`)** | 10 | 12.5% | 0% | 20% | 20% | 10% | 37.5% | 0% | 70% | 30% | 50% | 25.0% |
+| **Lead only (`org_small_lead`)** | 20 | 27.5% | 20% | 30% | 50% | 10% | 42.5% | 60% | 50% | 20% | 40% | 35.0% |
+| **Lead only (`org_small_lead`)** | **30** | **27.5%** | 40% | 40% | 30% | **0%** | **50.0%** | 50% | 30% | 70% | 50% | **38.8%** |
+
+### I.2 Paired task-by-task comparisons (exact two-sided McNemar test)
+
+| Comparison | Mode | Before / Run A | After / Run B | Fixed / Won | Broken / Lost | $p$ |
+|---|---|---|---|---|---|---|
+| **All roles (`org_small`): step 0 → 30** | `org` ($n=40$) | 22.5% (`9/40`) | **37.5% (`15/40`)** | 8 | 2 | 0.109 |
+| **All roles (`org_small`): step 0 → 30** | `solo` ($n=40$) | 45.0% (`18/40`) | **62.5% (`25/40`)** | 13 | 6 | 0.167 |
+| **All roles (`org_small`): step 0 → 30** | **both ($n=80$)** | **33.8% (`27/80`)** | **50.0% (`40/80`)** | **21** | **8** | **0.024** |
+| **Lead only (`org_small_lead`): step 0 → 30** | `org` ($n=40$) | 30.0% (`12/40`) | 27.5% (`11/40`) | 4 | 5 | 1.000 |
+| **Lead only (`org_small_lead`): step 0 → 30** | `solo` ($n=40$) | 42.5% (`17/40`) | 50.0% (`20/40`) | 12 | 9 | 0.664 |
+| **Lead only (`org_small_lead`): step 0 → 30** | **both ($n=80$)** | 36.2% (`29/80`) | 38.8% (`31/80`) | 16 | 14 | 0.856 |
+| **Step 30 head-to-head: `all` vs `lead`** | `org` ($n=40$) | 27.5% (`lead`) | **37.5% (`all`)** | 7 | 3 | 0.344 |
+| **Step 30 head-to-head: `all` vs `lead`** | `solo` ($n=40$) | 50.0% (`lead`) | **62.5% (`all`)** | 10 | 5 | 0.302 |
+| **Step 30 head-to-head: `all` vs `lead`** | **both ($n=80$)** | 38.8% (`lead`) | **50.0% (`all`)** | **17** | **8** | 0.108 |
+
+### I.3 Coordination metrics (`org` eval, $n=40$)
+
+| Coordination metric (`org` eval, $n=40$) | Base model (step 0) | Train lead only (step 30) | Train all roles (step 30) | Change in `all` (0 → 30) |
+|---|---|---|---|---|
+| **Critical-path latency (model calls)** | 18.3 | 16.8 | **14.1** | **−22.8%** |
+| **Exhausted workers per task (hit 6-turn cap)** | 1.18 | 1.10 | **0.53** | **−55.3%** |
+| **Worker model calls per task (sum across sites)** | 19.8 | 18.4 | **14.4** | **−27.3%** |
+| **Worker sandbox tool calls per task** | 18.9 | 17.4 | **12.8** | **−32.5%** |
+| **Worker plain-text reply fallbacks per task** | 3.20 | 2.88 | **2.35** | **−26.6%** |
+| **Worker generated tokens per task** | 9,320 | 9,103 | **7,224** | **−22.5%** |
+| **Lead generated tokens per task** | 2,829 | 2,121 | **2,374** | **−16.1%** |
+| **Org episodes hitting `max_turns` (out of 40)** | 6 | 5 | **1** | **−83.3%** |
+| **Solo episodes hitting `max_turns` (out of 40)** | 9 | 10 | **3** | **−66.7%** |
+| **Eval wall-clock time (80 rollouts)** | 469 s | 434 s | **332 s** | **−29.2%** |
+
+### I.4 Accuracy by slice
+
+| Slice | $n$ | Base (step 0) | Lead only (step 30) | All roles (step 30) |
+|---|---|---|---|---|
+| **Org by site count**: $K=2$ / $K=3$ / $K=4$ (`wide`) | 12 / 18 / 10 | 17% / 33% / 10% | 42% / 33% / **0%** | **42% / 44% / 20%** |
+| **Solo by site count**: $K=2$ / $K=3$ / $K=4$ (`wide`) | 12 / 18 / 10 | 25% / 56% / 50% | 50% / 50% / 50% | **75% / 67% / 40%** |
+| **Difficulty (`org + solo`)**: easy / medium / hard | 20 / 32 / 28 | 50% / 34% / 21% | 45% / 44% / 29% | **70% / 59% / 25%** |
+| **Messy files (`org + solo`)**: clean / 1 mess / 2 messes | 38 / 26 / 16 | 45% / 27% / 19% | 50% / 31% / 25% | **61% / 54% / 19%** |
+| **Specific mess kinds**: `dup` / `case` / `dates` | 16 / 16 / 6 | 19% / 25% / 0% | 38% / 12% / 17% | **31% / 44% / 33%** |
