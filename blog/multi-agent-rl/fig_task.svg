@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="12">
   <title>Anatomy of one task (o19900001): the lead sees only the question; employees.csv is split unevenly between boreal (157 rows) and cobalt (125 rows) with a messy departments.csv copied to both; the right answer needs per-site sums and counts pooled into 3,659,500 / 43 = 85,104.65.</title>
   <style>
-    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 10.5px; fill: #1a1a1a; white-space: pre; }
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 10.5px; white-space: pre; }
     .r { font-size: 10px; fill: #666; letter-spacing: 0.04em; }
     .h { font-size: 14px; font-weight: bold; fill: #1a1a1a; }
     .s { font-size: 11px; fill: #52514e; }

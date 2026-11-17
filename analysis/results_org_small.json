@@ -549,55 +549,55 @@
   }
  },
  "breakdown": {
-  "By site count K (org)/K=2": {
+  "By number of sites (team)/2 sites": {
    "base": 0.16666666666666666,
    "lead": 0.4166666666666667,
    "all": 0.4166666666666667,
    "n": 12
   },
-  "By site count K (org)/K=3": {
+  "By number of sites (team)/3 sites": {
    "base": 0.3333333333333333,
    "lead": 0.3333333333333333,
    "all": 0.4444444444444444,
    "n": 18
   },
-  "By site count K (org)/K=4": {
+  "By number of sites (team)/4 sites": {
    "base": 0.1,
    "lead": 0.0,
    "all": 0.2,
    "n": 10
   },
-  "By difficulty (org + solo)/easy": {
+  "By difficulty (team and solo)/easy": {
    "base": 0.5,
    "lead": 0.45,
    "all": 0.7,
    "n": 20
   },
-  "By difficulty (org + solo)/medium": {
+  "By difficulty (team and solo)/medium": {
    "base": 0.34375,
    "lead": 0.4375,
    "all": 0.59375,
    "n": 32
   },
-  "By difficulty (org + solo)/hard": {
+  "By difficulty (team and solo)/hard": {
    "base": 0.21428571428571427,
    "lead": 0.2857142857142857,
    "all": 0.25,
    "n": 28
   },
-  "By data mess (org + solo)/clean": {
+  "By problems in the data files (team and solo)/clean files": {
    "base": 0.4473684210526316,
    "lead": 0.5,
    "all": 0.6052631578947368,
    "n": 38
   },
-  "By data mess (org + solo)/1 mess": {
+  "By problems in the data files (team and solo)/one problem": {
    "base": 0.2692307692307692,
    "lead": 0.3076923076923077,
    "all": 0.5384615384615384,
    "n": 26
   },
-  "By data mess (org + solo)/2 messes": {
+  "By problems in the data files (team and solo)/two problems": {
    "base": 0.1875,
    "lead": 0.25,
    "all": 0.1875,

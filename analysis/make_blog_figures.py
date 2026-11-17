@@ -80,31 +80,32 @@ def sign_test(w, l):
 
 
 # ------------------------------------------------------------- fig 0: hero summary & punchline (top of post)
-fig, axes = plt.subplots(1, 3, figsize=(13.4, 3.35), gridspec_kw={"width_ratios": [1.15, 1.0, 1.25]})
+fig, axes = plt.subplots(1, 3, figsize=(13.4, 3.35), gridspec_kw={"width_ratios": [1.15, 1.1, 1.25]})
 
 # Panel A: Multi-agent org progress over training
 ax = axes[0]
 ys_all_org = [eval_all[s]["org"]["acc"] for s in STEPS_ALL]
 ys_lead_org = [eval_lead[s]["org"]["acc"] for s in STEPS_LEAD]
 ax.plot(STEPS_ALL, ys_all_org, color=COLOR["all"], lw=2.5, marker="o", ms=6.5, mec="#fdfdfd", mew=1.5,
-        label="Train all roles (lead + workers)")
+        label="Train all roles")
 ax.plot(STEPS_LEAD, ys_lead_org, color=COLOR["lead"], lw=2.0, ls="--", marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="Train lead only (freeze workers)")
+        label="Train lead only")
 ax.annotate(f"37.5%\n(+15 pts)", (SF, ys_all_org[-1]), xytext=(31.3, ys_all_org[-1] + 0.01),
             va="center", fontsize=9.0, fontweight="bold", color=COLOR["all"])
 ax.annotate(f"27.5%\n(stalled)", (SF, ys_lead_org[-1]), xytext=(31.3, ys_lead_org[-1] - 0.015),
             va="center", fontsize=8.8, fontweight="bold", color=COLOR["lead"])
-ax.set_title("1. Multi-agent accuracy over training")
+ax.set_title("1. Team accuracy over training")
 ax.set_xticks([0, 10, 20, 30])
-ax.set_xlabel("RL training step (1 GPU, ~3.5 hrs)")
+ax.set_xlabel("training step (1 GPU, ~3.5 hours)")
 ax.set_xlim(-2, 39)
 pct_axis(ax, 0.08, 0.50)
 ax.set_ylabel("held-out accuracy")
 ax.legend(loc="upper left", fontsize=8.3)
 
 # Panel B: Headline accuracy at Step 30 (Base vs Lead-only vs All roles)
+pct1 = lambda v: f"{100 * v:.1f}".rstrip("0").rstrip(".") + "%"
 ax = axes[1]
-groups_h = ["Multi-agent\n(org)", "Single-agent\n(solo, 0-shot)", "4-site OOD\n(K=4 wide)"]
+groups_h = ["Team", "Solo", "4-site\nteams"]
 v0_h = [eval_all[S0]["org"]["acc"], eval_all[S0]["solo"]["acc"], eval_all[S0]["org"]["acc_wide"]]
 vl_h = [eval_lead[SF]["org"]["acc"], eval_lead[SF]["solo"]["acc"], eval_lead[SF]["org"]["acc_wide"]]
 va_h = [eval_all[SF]["org"]["acc"], eval_all[SF]["solo"]["acc"], eval_all[SF]["org"]["acc_wide"]]
@@ -114,10 +115,10 @@ ax.bar(xh - wh, v0_h, width=wh, color=BASE, label="Base model (step 0)")
 ax.bar(xh, vl_h, width=wh, color=COLOR["lead"], label="Lead only (step 30)")
 ax.bar(xh + wh, va_h, width=wh, color=COLOR["all"], label="All roles (step 30)")
 for i in range(len(groups_h)):
-    ax.text(xh[i] + wh, va_h[i] + 0.018, f"{va_h[i]:.0%}", ha="center", va="bottom",
-            fontsize=8.6, fontweight="bold", color=COLOR["all"])
-    ax.text(xh[i], vl_h[i] + 0.018, f"{vl_h[i]:.0%}", ha="center", va="bottom",
-            fontsize=8.2, fontweight="bold", color=COLOR["lead"])
+    ax.text(xh[i] + wh + 0.03, va_h[i] + 0.018, pct1(va_h[i]), ha="center", va="bottom",
+            fontsize=7.8, fontweight="bold", color=COLOR["all"])
+    ax.text(xh[i] - 0.03, vl_h[i] + 0.018, pct1(vl_h[i]), ha="center", va="bottom",
+            fontsize=7.6, fontweight="bold", color=COLOR["lead"])
 ax.set_title("2. Accuracy at step 30")
 ax.set_xticks(xh)
 ax.set_xticklabels(groups_h, fontsize=8.8)
@@ -126,8 +127,8 @@ ax.legend(loc="upper left", fontsize=8.0)
 
 # Panel C: Coordination speed & worker reliability punchline
 ax = axes[2]
-cats_c = ["Critical-path\nlatency\n(calls / task)",
-          "Exhausted\nworkers\n(per task)"]
+cats_c = ["Calls on the\ncritical path\n(per task)",
+          "Workers out\nof turns\n(per task)"]
 base_c = [eval_all[S0]["org"]["latency"], eval_all[S0]["org"]["worker_exhausted"]]
 lead_c = [eval_lead[SF]["org"]["latency"], eval_lead[SF]["org"]["worker_exhausted"]]
 all_c = [eval_all[SF]["org"]["latency"], eval_all[SF]["org"]["worker_exhausted"]]
@@ -151,10 +152,10 @@ ax.set_yticklabels(cats_c, fontsize=8.7)
 ax.set_xlim(0, 1.48)
 ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:.0%}"))
 ax.set_xlabel("relative to base model (100%)")
-ax.set_title("3. Team speed & worker failures")
+ax.set_title("3. Team speed and worker failures")
 ax.grid(axis="y", visible=False)
 
-fig.subplots_adjust(wspace=0.36)
+fig.subplots_adjust(wspace=0.42)
 save(fig, "fig_hero_punchline.png")
 
 
@@ -165,14 +166,14 @@ ax = axes[0]
 ys_all_org = [eval_all[s]["org"]["acc"] for s in STEPS_ALL]
 ys_lead_org = [eval_lead[s]["org"]["acc"] for s in STEPS_LEAD]
 ax.plot(STEPS_ALL, ys_all_org, color=COLOR["all"], lw=2.2, marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="train all roles (RLCR)")
+        label="train all roles")
 ax.plot(STEPS_LEAD, ys_lead_org, color=COLOR["lead"], lw=2.0, ls="--", marker="o", ms=6, mec="#fdfdfd", mew=1.5,
         label="train lead only")
 ax.annotate(f"{ys_all_org[-1]:.1%}", (SF, ys_all_org[-1]), xytext=(31.2, ys_all_org[-1]),
             va="center", fontsize=9.5, fontweight="bold", color=COLOR["all"])
 ax.annotate(f"{ys_lead_org[-1]:.1%}", (SF, ys_lead_org[-1]), xytext=(31.2, ys_lead_org[-1]),
             va="center", fontsize=9.5, fontweight="bold", color=COLOR["lead"])
-ax.set_title("Multi-agent org (n=40)")
+ax.set_title("Team accuracy (40 held-out tasks)")
 ax.set_xticks([0, 5, 10, 15, 20, 25, 30])
 ax.set_xlabel("training step")
 ax.set_xlim(-2, 37)
@@ -184,16 +185,16 @@ ax = axes[1]
 ys_all_solo = [eval_all[s]["solo"]["acc"] for s in STEPS_ALL]
 ys_lead_solo = [eval_lead[s]["solo"]["acc"] for s in STEPS_LEAD]
 ax.plot(STEPS_ALL, ys_all_solo, color=COLOR["all"], lw=2.2, marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="train all roles -> solo")
+        label="train all roles")
 ax.plot(STEPS_LEAD, ys_lead_solo, color=COLOR["lead"], lw=2.0, ls="--", marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="train lead only -> solo")
+        label="train lead only")
 ax.annotate(f"{ys_all_solo[-1]:.1%}", (SF, ys_all_solo[-1]), xytext=(31.2, ys_all_solo[-1]),
             va="center", fontsize=9.5, fontweight="bold", color=COLOR["all"])
 ax.annotate(f"{ys_lead_solo[-1]:.1%}", (SF, ys_lead_solo[-1]), xytext=(31.2, ys_lead_solo[-1]),
             va="center", fontsize=9.5, fontweight="bold", color=COLOR["lead"])
-ax.set_title("Zero-shot solo transfer (n=40)")
+ax.set_title("Solo accuracy (never trained solo)")
 ax.set_xticks([0, 5, 10, 15, 20, 25, 30])
-ax.set_xlabel("training step (trained on org only)")
+ax.set_xlabel("training step")
 ax.set_xlim(-2, 37)
 pct_axis(ax, 0.05, 0.72)
 ax.legend(loc="lower right", fontsize=8.8)
@@ -215,9 +216,9 @@ rows_plot = [
     ("lead only (step 30)", eval_lead[30]["org"]["statuses"]),
 ]
 OUT = [
-    ("submitted", "called submit()", COLOR["all"]),
-    ("final_text", "replied in text", "#8fb9e8"),
-    ("max_turns", "hit turn limit", BASE),
+    ("submitted", "formally submitted", COLOR["all"]),
+    ("final_text", "answered in plain text", "#8fb9e8"),
+    ("max_turns", "ran out of turns", BASE),
 ]
 for i, (label, st) in enumerate(rows_plot):
     tot, left = sum(st.values()), 0.0
@@ -234,21 +235,21 @@ ax.invert_yaxis()
 ax.set_xlim(0, 1)
 ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:.0%}"))
 ax.grid(False)
-ax.set_title("How org episodes end")
+ax.set_title("How team attempts end")
 ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=3, fontsize=8.5)
 
 ax = axes[1]
 lat_all = [eval_all[s]["org"]["latency"] for s in STEPS_ALL]
 lat_lead = [eval_lead[s]["org"]["latency"] for s in STEPS_LEAD]
 ax.plot(STEPS_ALL, lat_all, color=COLOR["all"], lw=2.2, marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="all roles: latency")
+        label="train all roles")
 ax.plot(STEPS_LEAD, lat_lead, color=COLOR["lead"], lw=2.0, ls="--", marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="lead only: latency")
+        label="train lead only")
 ax.annotate(f"{lat_all[-1]:.1f}", (SF, lat_all[-1]), xytext=(31.2, lat_all[-1]), va="center",
             fontsize=9, fontweight="bold", color=COLOR["all"])
 ax.annotate(f"{lat_lead[-1]:.1f}", (SF, lat_lead[-1]), xytext=(31.2, lat_lead[-1]), va="center",
             fontsize=9, fontweight="bold", color=COLOR["lead"])
-ax.set_title("Critical-path latency (calls)")
+ax.set_title("Calls on the critical path")
 ax.set_xticks([0, 5, 10, 15, 20, 25, 30])
 ax.set_xlabel("training step")
 ax.set_xlim(-2, 36)
@@ -259,14 +260,14 @@ ax = axes[2]
 exh_all = [eval_all[s]["org"]["worker_exhausted"] for s in STEPS_ALL]
 exh_lead = [eval_lead[s]["org"]["worker_exhausted"] for s in STEPS_LEAD]
 ax.plot(STEPS_ALL, exh_all, color=COLOR["all"], lw=2.2, marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="all roles (-55%)")
+        label="train all roles")
 ax.plot(STEPS_LEAD, exh_lead, color=COLOR["lead"], lw=2.0, ls="--", marker="o", ms=6, mec="#fdfdfd", mew=1.5,
-        label="lead only (+5%)")
+        label="train lead only")
 ax.annotate(f"{exh_all[-1]:.2f}", (SF, exh_all[-1]), xytext=(31.2, exh_all[-1]), va="center",
             fontsize=9, fontweight="bold", color=COLOR["all"])
 ax.annotate(f"{exh_lead[-1]:.2f}", (SF, exh_lead[-1]), xytext=(31.2, exh_lead[-1]), va="center",
             fontsize=9, fontweight="bold", color=COLOR["lead"])
-ax.set_title("Exhausted workers per task")
+ax.set_title("Workers running out of turns, per task")
 ax.set_xticks([0, 5, 10, 15, 20, 25, 30])
 ax.set_xlabel("training step")
 ax.set_xlim(-2, 36)
@@ -289,11 +290,12 @@ def acc_by(rollouts, key_fn):
 
 
 groups = [
-    ("By site count K (org)", lambda r, t: f"K={t.n_sites}" if r["mode"] == "org" else None, ["K=2", "K=3", "K=4"]),
-    ("By difficulty (org + solo)", lambda r, t: t.difficulty, ["easy", "medium", "hard"]),
-    ("By data mess (org + solo)",
-     lambda r, t: "clean" if not t.mess else ("1 mess" if len(t.mess) == 1 else "2 messes"),
-     ["clean", "1 mess", "2 messes"]),
+    ("By number of sites (team)", lambda r, t: f"{t.n_sites} sites" if r["mode"] == "org" else None,
+     ["2 sites", "3 sites", "4 sites"]),
+    ("By difficulty (team and solo)", lambda r, t: t.difficulty, ["easy", "medium", "hard"]),
+    ("By problems in the data files (team and solo)",
+     lambda r, t: "clean files" if not t.mess else ("one problem" if len(t.mess) == 1 else "two problems"),
+     ["clean files", "one problem", "two problems"]),
 ]
 
 fig, axes = plt.subplots(1, 3, figsize=(13.6, 2.9))
@@ -314,7 +316,7 @@ for ax, (title, key_fn, cats) in zip(axes, groups):
                     va="center", fontsize=9, fontweight="bold", color=COLOR["all"])
         results["breakdown"][f"{title}/{c}"] = {"base": v0, "lead": vl, "all": va, "n": n}
     ax.set_yticks(ys)
-    ax.set_yticklabels([f"{c}\n(n={a0[c][1]})" for c in cats], fontsize=9.2)
+    ax.set_yticklabels([f"{c}\n({a0[c][1]} attempts)" for c in cats], fontsize=9.2)
     ax.set_title(title)
     ax.set_xlim(-0.05, 0.92)
     ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:.0%}"))

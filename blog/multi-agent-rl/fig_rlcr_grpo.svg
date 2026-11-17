@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 510" font-family="DejaVu Sans, Helvetica, Arial, sans-serif" font-size="13">
   <title>One GRPO group of 6 organisations attempting the same task, and how Reinforcement Learning from Collective Rewards (RLCR) assigns the group-relative advantage to every agent versus only the lead.</title>
   <style>
-    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 11px; fill: #1a1a1a; }
+    .m { font-family: "DejaVu Sans Mono", Menlo, monospace; font-size: 11px; }
     .s { font-size: 11px; fill: #52514e; }
   </style>
   <rect width="880" height="510" fill="#fdfdfd"/>

@@ -56,24 +56,22 @@ def save(fig, name):
 b, ld, al = ev_all[S0], ev_lead[SF], ev_all[SF]
 mt = lambda e, mode: e[mode]["statuses"].get("max_turns", 0)
 metrics = [  # (label, base, lead-only step 30, all roles step 30, format)
-    ("Critical-path latency (calls)", b["org"]["latency"], ld["org"]["latency"], al["org"]["latency"], "{:.1f}"),
-    ("Workers hitting the 6-call cap / task", b["org"]["worker_exhausted"], ld["org"]["worker_exhausted"],
+    ("Calls on the critical path", b["org"]["latency"], ld["org"]["latency"], al["org"]["latency"], "{:.1f}"),
+    ("Workers running out of turns, per task", b["org"]["worker_exhausted"], ld["org"]["worker_exhausted"],
      al["org"]["worker_exhausted"], "{:.2f}"),
-    ("Worker model calls / task", b["org"]["worker_calls"], ld["org"]["worker_calls"], al["org"]["worker_calls"],
+    ("Worker model calls, per task", b["org"]["worker_calls"], ld["org"]["worker_calls"], al["org"]["worker_calls"],
      "{:.1f}"),
-    ("Worker sandbox tool calls / task", b["org"]["worker_tool_calls"], ld["org"]["worker_tool_calls"],
+    ("Worker tool calls, per task", b["org"]["worker_tool_calls"], ld["org"]["worker_tool_calls"],
      al["org"]["worker_tool_calls"], "{:.1f}"),
-    ("Worker plain-text reply fallbacks / task", b["org"]["reply_fallbacks"], ld["org"]["reply_fallbacks"],
-     al["org"]["reply_fallbacks"], "{:.2f}"),
-    ("Worker tokens / task", b["org"]["tokens"]["worker"], ld["org"]["tokens"]["worker"],
+    ("Tokens written by workers, per task", b["org"]["tokens"]["worker"], ld["org"]["tokens"]["worker"],
      al["org"]["tokens"]["worker"], "{:,.0f}"),
-    ("Lead tokens / task", b["org"]["tokens"]["lead"], ld["org"]["tokens"]["lead"], al["org"]["tokens"]["lead"],
+    ("Tokens written by the lead, per task", b["org"]["tokens"]["lead"], ld["org"]["tokens"]["lead"], al["org"]["tokens"]["lead"],
      "{:,.0f}"),
-    ("Org episodes timing out (of 40)", mt(b, "org"), mt(ld, "org"), mt(al, "org"), "{:.0f}"),
-    ("Solo episodes timing out (of 40)", mt(b, "solo"), mt(ld, "solo"), mt(al, "solo"), "{:.0f}"),
-    ("Eval wall-clock, 80 rollouts (s)", b["time"], ld["time"], al["time"], "{:.0f}"),
+    ("Team attempts that time out (of 40)", mt(b, "org"), mt(ld, "org"), mt(al, "org"), "{:.0f}"),
+    ("Solo attempts that time out (of 40)", mt(b, "solo"), mt(ld, "solo"), mt(al, "solo"), "{:.0f}"),
+    ("Seconds to run all 80 test attempts", b["time"], ld["time"], al["time"], "{:.0f}"),
 ]
-fig, ax = plt.subplots(figsize=(9.6, 5.2))
+fig, ax = plt.subplots(figsize=(9.6, 4.8))
 y = np.arange(len(metrics))[::-1]
 ax.axvline(100, color=INK2, lw=1.0)
 for yi, (lab, vb, vl, va, fmt) in zip(y, metrics):
@@ -95,7 +93,7 @@ ax.set_yticklabels([m[0] for m in metrics], fontsize=9.2)
 ax.set_xlim(10, 120)
 ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f"{v:.0f}%"))
 ax.set_xlabel("step-30 value as % of the base model (lower is better on every row)")
-ax.set_title("What changed inside the organisation after 30 steps")
+ax.set_title("What changed inside the team after 30 steps")
 ax.grid(axis="y", visible=False)
 ax.scatter([], [], s=70, color=COLOR["lead"], label="lead only (step 30)")
 ax.scatter([], [], s=70, color=COLOR["all"], label="all roles (step 30)")
